@@ -1,6 +1,6 @@
 (ns conduit.user
   (:require [com.fulcrologic.fulcro.inspect.preload]
-            #_[devtools.preload]
+            [devtools.preload]
             [conduit.client :as client]))
 
 (defn after-load

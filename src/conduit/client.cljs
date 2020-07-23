@@ -4,9 +4,19 @@
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
     [com.fulcrologic.fulcro.dom :as dom]
     [taoensso.timbre :as log]
+    [com.fulcrologic.fulcro.algorithms.tx-processing :as ftx]
     [com.fulcrologic.fulcro.data-fetch :as df]
-    [com.fulcrologic.fulcro.mutations :as m]
-    [com.fulcrologic.fulcro.application :as app]))
+    [com.fulcrologic.fulcro.application :as app]
+    [com.wsscode.pathom.core :as p]
+    [com.wsscode.pathom.connect :as pc]
+    [edn-query-language.core :as eql]
+    [clojure.core.async :as async]
+    [clojure.pprint :as pp]))
+
+(defn debug
+  [x]
+  (dom/pre {}
+           (with-out-str (pp/pprint x))))
 
 (defsc TagPill [this {:conduit.tag/keys [tag]}]
   {:query [:conduit.tag/tag]
@@ -18,12 +28,17 @@
 
 (def ui-tag-pill (comp/factory TagPill {:keyfn :conduit.tag/tag}))
 
-(defsc PopularTags [this {::keys [popular-tags]}]
+(defsc PopularTags [this {::keys [popular-tags]
+                          :as    props}]
   {:ident (fn [] [:component/id ::popular-tags])
    :query [::popular-tags]}
   (dom/div
     {:className "sidebar"}
     (dom/p "Popular Tags")
+    #_(debug props)
+    (dom/button
+      {:onClick #(df/load! this :>/this PopularTags)}
+      "fetch")
     (dom/div
       {:className "tag-list"}
       (map ui-tag-pill popular-tags))))
@@ -42,10 +57,7 @@
       (dom/p "A place to share your knowledge."))))
 
 (defsc FeedToggle [this props]
-  {:query []})
-
-(defn ui-feed-toggle
-  [_]
+  {:query []}
   (dom/div
     {:className "feed-toggle"}
     (dom/ul
@@ -62,11 +74,10 @@
                   :href      href}
                  label))))))
 
-(defsc ArticlePreview [this props]
-  {:query []})
+(def ui-feed-toggle (comp/factory FeedToggle))
 
-(defn ui-article-preview
-  [_]
+(defsc ArticlePreview [this props]
+  {:query []}
   (dom/div
     {:className "article-preview"}
     (dom/div
@@ -95,8 +106,11 @@
       (dom/p "This is the description for the post.")
       (dom/span "Read more..."))))
 
+(def ui-article-preview (comp/factory ArticlePreview))
+
 (defsc Feed [this {::keys  [articles]
-                   :>/keys [popular-tags feed-toggle]}]
+                   :>/keys [popular-tags feed-toggle]
+                   :as     props}]
   {:ident         (fn [] [:component/id ::feed])
    :query         [{::articles (comp/get-query ArticlePreview)}
                    {:>/popular-tags (comp/get-query PopularTags)}
@@ -104,6 +118,7 @@
    :route-segment ["feed"]}
   (dom/div
     {:className "home-page"}
+    #_(debug props)
     (ui-banner)
     (dom/div
       {:className "container page"}
@@ -194,14 +209,17 @@
 
 (def ui-footer (comp/factory Footer))
 
-
-(defsc Root [this {:>/keys    [footer header]
-                   :root/keys [router]}]
-  {:query         [{:>/footer (comp/get-query Footer)}
-                   {:>/header (comp/get-query Header)}
-                   {:root/router (comp/get-query TopRouter)}]
-   :initial-state {:root/router {}}}
+(defsc Root [this {:>/keys [footer header router]
+                   :as     props}]
+  {:query         [{:>/header (comp/get-query Header)}
+                   {:>/router (comp/get-query TopRouter)}
+                   {:>/footer (comp/get-query Footer)}]
+   :initial-state (fn [_]
+                    {:>/header (comp/get-initial-state Header _)
+                     :>/router {}
+                     :>/footer (comp/get-initial-state Footer _)})}
   (comp/fragment
+    #_(debug props)
     (ui-header header)
     (ui-top-router router)
     (ui-footer footer)))
@@ -209,13 +227,58 @@
 (defn client-did-mount
   "Must be used as :client-did-mount parameter of app creation, or called just after you mount the app."
   [app]
-  (dr/change-route app ["main"]))
-
-(def api-url
-  "https://conduit.productionready.io/api")
+  (dr/change-route app ["feed"]))
 
 
-(defonce app (app/fulcro-app {:client-did-mount client-did-mount}))
+(defn fetch
+  [{::keys [api-url]} {::keys [path]}]
+  (let [p (async/promise-chan)]
+    (-> (js/fetch (str api-url path))
+        (.then (fn [c] (.json c)))
+        (.then (fn [c] (async/put! p c))))
+    p))
+
+(def register
+  [(pc/resolver `popular-tags
+                {::pc/output [::popular-tags]}
+                (fn [ctx _]
+                  (log/info :req ::popular-tags)
+                  (async/go
+                    (let [result (async/<! (fetch ctx {::path "/tags"}))
+                          {:strs [tags]} (js->clj result)]
+                      {::popular-tags (for [tag tags]
+                                        {:conduit.tag/tag tag})}))))])
+
+(def parser
+  (p/parallel-parser
+    {::p/plugins [(pc/connect-plugin {::pc/register register})]}))
+
+(defn transmit!
+  [{:keys [parser]
+    :as   env} {::ftx/keys [id idx ast options update-handler
+                            result-handler active?]}]
+  (let [query (eql/ast->query ast)
+        result (parser env query)]
+    (log/info :query query)
+    (async/go
+      (let [body (async/<! result)]
+        (log/info :result body)
+        (result-handler {:body                 body
+                         :original-transaction ast
+                         :status-code          200})))))
+
+(def remote
+  {:transmit!               transmit!
+   :parser                  parser
+   ::api-url                "https://conduit.productionready.io/api"
+   ::p/reader               [p/map-reader
+                             pc/parallel-reader
+                             pc/open-ident-reader
+                             p/env-placeholder-reader]
+   ::p/placeholder-prefixes #{">"}})
+
+(defonce app (app/fulcro-app {:client-did-mount client-did-mount
+                              :remotes          {:remote remote}}))
 
 (def node "conduit")
 
