@@ -108,6 +108,30 @@
 
 (def ui-article-preview (comp/factory ArticlePreview))
 
+(comment
+  {[:component/id :conduit.client/feed] {:>/popular-tags          {:conduit.client/popular-tags [{:conduit.tag/tag "‌"}
+                                                                                                 {:conduit.tag/tag "‌‌"}
+                                                                                                 {:conduit.tag/tag "‌‌‌"}
+                                                                                                 {:conduit.tag/tag "‌‌‌‌‌"}
+                                                                                                 {:conduit.tag/tag "‌‌‌‌"}
+                                                                                                 {:conduit.tag/tag "‌‌‌‌‌‌‌‌‌‌"}
+                                                                                                 {:conduit.tag/tag "‌‌‌‌‌‌"}
+                                                                                                 {:conduit.tag/tag "‌‌‌‌‌‌‌‌‌‌‌"}
+                                                                                                 {:conduit.tag/tag "‌‌‌‌‌‌‌"}
+                                                                                                 {:conduit.tag/tag "‌‌‌‌‌‌‌‌"}
+                                                                                                 {:conduit.tag/tag "HuManIty"}
+                                                                                                 {:conduit.tag/tag "Hu‌Man‌Ity"}
+                                                                                                 {:conduit.tag/tag "Gandhi"}
+                                                                                                 {:conduit.tag/tag "BlackLivesMatter"}
+                                                                                                 {:conduit.tag/tag "Black‌Lives‌Matter"}
+                                                                                                 {:conduit.tag/tag "HITLER"}
+                                                                                                 {:conduit.tag/tag "SIDA"}
+                                                                                                 {:conduit.tag/tag "test"}
+                                                                                                 {:conduit.tag/tag "butt"}
+                                                                                                 {:conduit.tag/tag "dragons"}]}
+                                         :>/feed-toggle           {}
+                                         :conduit.client/articles :com.wsscode.pathom.core/not-found}})
+
 (defsc Feed [this {::keys  [articles]
                    :>/keys [popular-tags feed-toggle]
                    :as     props}]
@@ -115,6 +139,11 @@
    :query         [{::articles (comp/get-query ArticlePreview)}
                    {:>/popular-tags (comp/get-query PopularTags)}
                    {:>/feed-toggle (comp/get-query FeedToggle)}]
+   :will-enter    (fn [app _]
+                    (dr/route-deferred [:component/id ::feed]
+                                       #(df/load app [:component/id ::feed] Feed
+                                                 {:post-mutation        `dr/target-ready
+                                                  :post-mutation-params {:target [:component/id ::feed]}})))
    :route-segment ["feed"]}
   (dom/div
     {:className "home-page"}
@@ -242,12 +271,29 @@
   [(pc/resolver `popular-tags
                 {::pc/output [::popular-tags]}
                 (fn [ctx _]
-                  (log/info :req ::popular-tags)
                   (async/go
                     (let [result (async/<! (fetch ctx {::path "/tags"}))
                           {:strs [tags]} (js->clj result)]
                       {::popular-tags (for [tag tags]
-                                        {:conduit.tag/tag tag})}))))])
+                                        {:conduit.tag/tag tag})}))))
+   (pc/resolver `articles
+                {::pc/output [:conduit.client/articles]}
+                (fn [ctx _]
+                  (async/go
+                    (let [result (async/<! (fetch ctx {::path "/articles"}))
+                          {:strs [articles]} (js->clj result)]
+                      {:conduit.client/articles (for [{:strs [updatedAt body createdAt author favorited slug tagList favoritesCount title
+                                                              description]} articles]
+                                                  {::updatedAt      updatedAt
+                                                   ::body           body
+                                                   ::createdAt      createdAt
+                                                   ::author         author
+                                                   ::favorited      favorited
+                                                   ::slug           slug
+                                                   ::tagList        tagList
+                                                   ::favoritesCount favoritesCount
+                                                   ::title          title
+                                                   ::description    description})}))))])
 
 (def parser
   (p/parallel-parser
