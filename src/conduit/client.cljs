@@ -3,22 +3,40 @@
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
     [com.fulcrologic.fulcro.dom :as dom]
-    [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.algorithms.tx-processing :as ftx]
     [com.fulcrologic.fulcro.data-fetch :as df]
+    [cljs.core.async.interop :refer-macros [<p!]]
     [com.fulcrologic.fulcro.application :as app]
     [com.wsscode.pathom.core :as p]
     [com.wsscode.pathom.connect :as pc]
     [edn-query-language.core :as eql]
-    [clojure.core.async :as async]
-    [clojure.pprint :as pp]))
+    [clojure.core.async :as async]))
 
-(defn debug
-  [x]
-  (dom/pre {}
-           (with-out-str (pp/pprint x))))
+;; TODO: Create a lib for "pathom remote"
+(defn transmit!
+  [{:keys [parser]
+    :as   env} {::ftx/keys [id idx ast options update-handler
+                            result-handler active?]}]
+  (let [query (eql/ast->query ast)
+        result (parser env query)]
+    (async/go
+      (result-handler {:body                 (async/<! result)
+                       :original-transaction ast
+                       :status-code          200}))))
+
+
 
 (defsc TagPill [this {:conduit.tag/keys [tag]}]
+  {:query [:conduit.tag/tag]
+   :ident :conduit.tag/tag}
+  (dom/li
+    {:className "tag-default tag-pill tag-outline"
+     :href      ""}
+    tag))
+
+(def ui-tag-pill (comp/factory TagPill {:keyfn :conduit.tag/tag}))
+
+(defsc TagLink [this {:conduit.tag/keys [tag]}]
   {:query [:conduit.tag/tag]
    :ident :conduit.tag/tag}
   (dom/a
@@ -26,22 +44,17 @@
      :href      ""}
     tag))
 
-(def ui-tag-pill (comp/factory TagPill {:keyfn :conduit.tag/tag}))
+(def ui-tag-link (comp/factory TagLink {:keyfn :conduit.tag/tag}))
 
-(defsc PopularTags [this {::keys [popular-tags]
-                          :as    props}]
+(defsc PopularTags [this {::keys [popular-tags]}]
   {:ident (fn [] [:component/id ::popular-tags])
    :query [::popular-tags]}
   (dom/div
     {:className "sidebar"}
     (dom/p "Popular Tags")
-    #_(debug props)
-    (dom/button
-      {:onClick #(df/load! this :>/this PopularTags)}
-      "fetch")
     (dom/div
       {:className "tag-list"}
-      (map ui-tag-pill popular-tags))))
+      (map ui-tag-link popular-tags))))
 
 (def ui-popular-tags (comp/factory PopularTags))
 
@@ -76,8 +89,18 @@
 
 (def ui-feed-toggle (comp/factory FeedToggle))
 
-(defsc ArticlePreview [this props]
-  {:query []}
+(defsc ArticlePreview [this {:conduit.profile/keys [image username]
+                             :conduit.article/keys [title created-at
+                                                    description tag-list favorites-count]}]
+  {:query [:conduit.article/description
+           :conduit.article/title
+           :conduit.article/tag-list
+           :conduit.article/favorites-count
+           :conduit.article/created-at
+           :conduit.profile/image
+           :conduit.profile/username
+           :conduit.article/slug]
+   :ident :conduit.article/slug}
   (dom/div
     {:className "article-preview"}
     (dom/div
@@ -85,69 +108,52 @@
       (dom/a
         {:href "profile.html"})
       (dom/img
-        {:src "http://i.imgur.com/Qr71crq.jpg"})
+        {:src image})
       (dom/div
         {:className "info"}
         (dom/a
           {:className "author"
-           :href      ""} "Eric Simons")
+           :href      ""}
+          username)
         (dom/span
           {:className "date"}
-          "January 20th"))
+          created-at))
       (dom/button
         {:className "btn btn-outline-primary btn-sm pull-xs-right"}
         (dom/i
           {:className "ion-heart"}
-          "29")))
+          favorites-count)))
     (dom/a
       {:className "preview-link"
        :href      ""}
-      (dom/h1 "How to build webapps that scale")
-      (dom/p "This is the description for the post.")
-      (dom/span "Read more..."))))
+      (dom/h1 title)
+      (dom/p description)
+      (dom/span "Read more...")
+      (dom/ul
+        {:className "tag-list"}
+        (map ui-tag-pill tag-list)))))
 
-(def ui-article-preview (comp/factory ArticlePreview))
-
-(comment
-  {[:component/id :conduit.client/feed] {:>/popular-tags          {:conduit.client/popular-tags [{:conduit.tag/tag "‌"}
-                                                                                                 {:conduit.tag/tag "‌‌"}
-                                                                                                 {:conduit.tag/tag "‌‌‌"}
-                                                                                                 {:conduit.tag/tag "‌‌‌‌‌"}
-                                                                                                 {:conduit.tag/tag "‌‌‌‌"}
-                                                                                                 {:conduit.tag/tag "‌‌‌‌‌‌‌‌‌‌"}
-                                                                                                 {:conduit.tag/tag "‌‌‌‌‌‌"}
-                                                                                                 {:conduit.tag/tag "‌‌‌‌‌‌‌‌‌‌‌"}
-                                                                                                 {:conduit.tag/tag "‌‌‌‌‌‌‌"}
-                                                                                                 {:conduit.tag/tag "‌‌‌‌‌‌‌‌"}
-                                                                                                 {:conduit.tag/tag "HuManIty"}
-                                                                                                 {:conduit.tag/tag "Hu‌Man‌Ity"}
-                                                                                                 {:conduit.tag/tag "Gandhi"}
-                                                                                                 {:conduit.tag/tag "BlackLivesMatter"}
-                                                                                                 {:conduit.tag/tag "Black‌Lives‌Matter"}
-                                                                                                 {:conduit.tag/tag "HITLER"}
-                                                                                                 {:conduit.tag/tag "SIDA"}
-                                                                                                 {:conduit.tag/tag "test"}
-                                                                                                 {:conduit.tag/tag "butt"}
-                                                                                                 {:conduit.tag/tag "dragons"}]}
-                                         :>/feed-toggle           {}
-                                         :conduit.client/articles :com.wsscode.pathom.core/not-found}})
+(def ui-article-preview (comp/factory ArticlePreview {:keyfn :conduit.article/slug}))
 
 (defsc Feed [this {::keys  [articles]
                    :>/keys [popular-tags feed-toggle]
                    :as     props}]
   {:ident         (fn [] [:component/id ::feed])
-   :query         [{::articles (comp/get-query ArticlePreview)}
+   :query         [:component/id
+                   {::articles (comp/get-query ArticlePreview)}
                    {:>/popular-tags (comp/get-query PopularTags)}
                    {:>/feed-toggle (comp/get-query FeedToggle)}]
-   :will-enter    (fn [app _]
-                    (dr/route-deferred [:component/id ::feed]
-                                       #(df/load app [:component/id ::feed] Feed
-                                                 {:post-mutation        `dr/target-ready
-                                                  :post-mutation-params {:target [:component/id ::feed]}})))
+   #_#_:will-enter (fn [app _]
+                     (dr/route-deferred [:component/id ::feed]
+                                        #(df/load! app [:component/id ::feed] Feed
+                                                   {:post-mutation        `dr/target-ready
+                                                    :post-mutation-params {:target [:component/id ::feed]}})))
    :route-segment ["feed"]}
   (dom/div
     {:className "home-page"}
-    #_(debug props)
+    (dom/button
+      {:onClick #(df/load! this [:component/id ::feed] Feed)}
+      "WIP - load")
     (ui-banner)
     (dom/div
       {:className "container page"}
@@ -261,11 +267,11 @@
 
 (defn fetch
   [{::keys [api-url]} {::keys [path]}]
-  (let [p (async/promise-chan)]
+  (async/go
     (-> (js/fetch (str api-url path))
-        (.then (fn [c] (.json c)))
-        (.then (fn [c] (async/put! p c))))
-    p))
+        <p!
+        .json
+        <p!)))
 
 (def register
   [(pc/resolver `popular-tags
@@ -281,37 +287,36 @@
                 (fn [ctx _]
                   (async/go
                     (let [result (async/<! (fetch ctx {::path "/articles"}))
-                          {:strs [articles]} (js->clj result)]
-                      {:conduit.client/articles (for [{:strs [updatedAt body createdAt author favorited slug tagList favoritesCount title
-                                                              description]} articles]
-                                                  {::updatedAt      updatedAt
-                                                   ::body           body
-                                                   ::createdAt      createdAt
-                                                   ::author         author
-                                                   ::favorited      favorited
-                                                   ::slug           slug
-                                                   ::tagList        tagList
-                                                   ::favoritesCount favoritesCount
-                                                   ::title          title
-                                                   ::description    description})}))))])
+                          {:strs [articlesCount
+                                  articles]} (js->clj result)]
+                      {::articles-count articlesCount
+                       ::articles       (for [{:strs [updatedAt body createdAt author favorited slug tagList favoritesCount title
+                                                      description]} articles
+                                              :let [{:strs [bio
+                                                            following
+                                                            image
+                                                            username]} author
+                                                    profile #:conduit.profile{:bio       bio
+                                                                              :following following
+                                                                              :image     image
+                                                                              :username  username}]]
+                                          (merge
+                                            profile
+                                            #:conduit.article{:updated-at      updatedAt
+                                                              :body            body
+                                                              :created-at      createdAt
+                                                              :author          profile
+                                                              :favorited?      favorited
+                                                              :slug            slug
+                                                              :tag-list        (for [tag tagList]
+                                                                                 {:conduit.tag/tag tag})
+                                                              :favorites-count favoritesCount
+                                                              :title           title
+                                                              :description     description}))}))))])
 
 (def parser
   (p/parallel-parser
     {::p/plugins [(pc/connect-plugin {::pc/register register})]}))
-
-(defn transmit!
-  [{:keys [parser]
-    :as   env} {::ftx/keys [id idx ast options update-handler
-                            result-handler active?]}]
-  (let [query (eql/ast->query ast)
-        result (parser env query)]
-    (log/info :query query)
-    (async/go
-      (let [body (async/<! result)]
-        (log/info :result body)
-        (result-handler {:body                 body
-                         :original-transaction ast
-                         :status-code          200})))))
 
 (def remote
   {:transmit!               transmit!
