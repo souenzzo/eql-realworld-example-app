@@ -47,8 +47,11 @@
 (def ui-tag-link (comp/factory TagLink {:keyfn :conduit.tag/tag}))
 
 (defsc PopularTags [this {::keys [popular-tags]}]
-  {:ident (fn [] [:component/id ::popular-tags])
-   :query [::popular-tags]}
+  {:ident         (fn [] [:component/id ::popular-tags])
+   :query         [:component/id
+                   ::popular-tags]
+   :initial-state (fn [_]
+                    {:component/id ::popular-tags})}
   (dom/div
     {:className "sidebar"}
     (dom/p "Popular Tags")
@@ -121,8 +124,8 @@
       (dom/button
         {:className "btn btn-outline-primary btn-sm pull-xs-right"}
         (dom/i
-          {:className "ion-heart"}
-          favorites-count)))
+          {:className "ion-heart"})
+        favorites-count))
     (dom/a
       {:className "preview-link"
        :href      ""}
@@ -143,17 +146,18 @@
                    {::articles (comp/get-query ArticlePreview)}
                    {:>/popular-tags (comp/get-query PopularTags)}
                    {:>/feed-toggle (comp/get-query FeedToggle)}]
-   #_#_:will-enter (fn [app _]
-                     (dr/route-deferred [:component/id ::feed]
-                                        #(df/load! app [:component/id ::feed] Feed
-                                                   {:post-mutation        `dr/target-ready
-                                                    :post-mutation-params {:target [:component/id ::feed]}})))
+   :initial-state (fn [_]
+                    {:component/id   ::feed
+                     :>/popular-tags (comp/get-initial-state PopularTags _)
+                     :>/feed-toggle  (comp/get-initial-state FeedToggle _)})
+   :will-enter    (fn [app _]
+                    (dr/route-deferred [:component/id ::feed]
+                                       #(df/load! app [:component/id ::feed] Feed
+                                                  {:post-mutation        `dr/target-ready
+                                                   :post-mutation-params {:target [:component/id ::feed]}})))
    :route-segment ["feed"]}
   (dom/div
     {:className "home-page"}
-    (dom/button
-      {:onClick #(df/load! this [:component/id ::feed] Feed)}
-      "WIP - load")
     (ui-banner)
     (dom/div
       {:className "container page"}
@@ -167,26 +171,94 @@
           {:className "col-md-3"}
           (ui-popular-tags popular-tags))))))
 
-(defsc Login [this props]
-  {:ident         (fn [] [:component/id ::login])
+(defsc SignUp [this props]
+  {:ident         (fn [] [:component/id ::sign-up])
    :query         []
-   :route-segment ["login"]}
-  (dom/div "login"))
+   :route-segment ["sign-up"]}
+  (dom/div
+    {:className "auth-page"}
+    (dom/div
+      {:className "container page"}
+      (dom/div
+        {:className "row"}
+        (dom/div
+          {:className "col-md-6 offset-md-3 col-xs-12"}
+          (dom/h1
+            {:className "text-xs-center"}
+            "Sign up")
+          (dom/p
+            {:className "text-xs-center"}
+            (dom/a
+              {:href ""}
+              "Have an account?"))
+          (dom/ul
+            {:className "error-messages"}
+            (dom/li "That email is already taken"))
+          (dom/form
+            (dom/fieldset
+              {:className "form-group"}
+              (dom/input
+                {:className   "form-control form-control-lg"
+                 :type        "text",
+                 :placeholder "Your Name"}))
+            (dom/fieldset
+              {:className "form-group"}
+              (dom/input
+                {:className   "form-control form-control-lg"
+                 :type        "text"
+                 :placeholder "Email"}))
+            (dom/fieldset
+              {:className "form-group"}
+              (dom/input
+                {:className   "form-control form-control-lg"
+                 :type        "password",
+                 :placeholder "Password"}))
+            (dom/button
+              {:className "btn btn-lg btn-primary pull-xs-right"}
+              "Sign up")))))))
 
-(defsc Register [this props]
-  {:ident         (fn [] [:component/id ::register])
+(defsc SignIn [this props]
+  {:ident         (fn [] [:component/id ::sign-in])
    :query         []
-   :route-segment ["register"]}
-  (dom/div "register"))
-
-(defsc Settings [this props]
-  {:ident         (fn [] [:component/id ::settings])
-   :query         []
-   :route-segment ["settings"]}
-  (dom/div "settings"))
+   :route-segment ["sign-in"]}
+  (dom/div
+    {:className "auth-page"}
+    (dom/div
+      {:className "container page"}
+      (dom/div
+        {:className "row"}
+        (dom/div
+          {:className "col-md-6 offset-md-3 col-xs-12"}
+          (dom/h1
+            {:className "text-xs-center"}
+            "Sign in")
+          (dom/p
+            {:className "text-xs-center"}
+            (dom/a
+              {:href ""}
+              "Have an account?"))
+          (dom/ul
+            {:className "error-messages"}
+            (dom/li "That email is already taken"))
+          (dom/form
+            (dom/fieldset
+              {:className "form-group"}
+              (dom/input
+                {:className   "form-control form-control-lg"
+                 :type        "text"
+                 :placeholder "Email"}))
+            (dom/fieldset
+              {:className "form-group"}
+              (dom/input
+                {:className   "form-control form-control-lg"
+                 :type        "password",
+                 :placeholder "Password"}))
+            (dom/button
+              {:className "btn btn-lg btn-primary pull-xs-right"}
+              "Sign in")))))))
 
 (defrouter TopRouter [this {:keys [current-state]}]
-  {:router-targets [Feed Login Register Settings]}
+  {:router-targets [Feed SignIn SignUp]}
   (case current-state
     :pending (dom/div "Loading...")
     :failed (dom/div "Loading seems to have failed. Try another route.")
@@ -194,8 +266,13 @@
 
 (def ui-top-router (comp/factory TopRouter))
 
-(defsc Header [this {::keys []}]
-  {:query []}
+(defsc Header [this {:keys [com.fulcrologic.fulcro.routing.dynamic-routing/current-route]}]
+  {:query         [:com.fulcrologic.fulcro.routing.dynamic-routing/current-route]
+   :ident         (fn []
+                    [:com.fulcrologic.fulcro.routing.dynamic-routing/id
+                     :conduit.client/TopRouter])
+   :initial-state (fn [_]
+                    (comp/get-initial-state TopRouter _))}
   (dom/nav
     {:className "navbar navbar-light"}
     (dom/div
@@ -207,18 +284,21 @@
         {:className "nav navbar-nav pull-xs-right"}
         (for [{::keys [label href]} [{::label "Home"
                                       ::href  "feed"}
-                                     {::label "New Post"
-                                      ::href  ""}
-                                     {::label "Settings"
-                                      ::href  "settings"}
                                      {::label "Sign Up"
-                                      ::href  "login"}]]
+                                      ::href  "sign-up"}
+                                     {::label "Sign In"
+                                      ::href  "sign-in"}]]
           (dom/li
             {:key       href
              :className "nav-item"}
             (dom/a
-              {:onClick   #(dr/change-route this [href])
-               :className "nav-link active"}
+              {:onClick #(dr/change-route this [href])
+               :classes ["nav-link"
+                         (when  (some-> current-route
+                                        second
+                                        name
+                                        (= href))
+                           "active")]}
               label)
             ;;TODO: Back to href
             #_(dom/a
@@ -251,7 +331,7 @@
                    {:>/footer (comp/get-query Footer)}]
    :initial-state (fn [_]
                     {:>/header (comp/get-initial-state Header _)
-                     :>/router {}
+                     :>/router (comp/get-initial-state TopRouter _)
                      :>/footer (comp/get-initial-state Footer _)})}
   (comp/fragment
     #_(debug props)
