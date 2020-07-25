@@ -93,7 +93,7 @@
 (def ui-feed-toggle (comp/factory FeedToggle))
 
 (defsc ArticlePreview [this {:conduit.profile/keys [image username]
-                             :conduit.article/keys [title created-at
+                             :conduit.article/keys [title created-at slug
                                                     description tag-list favorites-count]}]
   {:query [:conduit.article/description
            :conduit.article/title
@@ -126,6 +126,9 @@
         (dom/i
           {:className "ion-heart"})
         favorites-count))
+    (dom/button
+      {:onClick #(dr/change-route this ["article" slug])}
+      slug)
     (dom/a
       {:className "preview-link"
        :href      ""}
@@ -217,6 +220,87 @@
               {:className "btn btn-lg btn-primary pull-xs-right"}
               "Sign up")))))))
 
+(defsc Article [this {:conduit.article/keys [slug body]}]
+  {:query         [:conduit.article/slug
+                   :conduit.article/body]
+   :ident         :conduit.article/slug
+   :route-segment ["article" :conduit.article/slug]
+   :will-enter    (fn [app {:conduit.article/keys [slug]}]
+                    (dr/route-deferred [:conduit.article/slug slug]
+                                       #(df/load! app [:conduit.article/slug slug] Article
+                                                  {:post-mutation        `dr/target-ready
+                                                   :post-mutation-params {:target [:conduit.article/slug slug]}})))}
+  (dom/div
+    :.article-page
+    (dom/div
+      :.banner
+      (dom/div
+        :.container
+        (dom/h1 "How to build webapps that scale")
+        (dom/div
+          :.article-meta
+          (dom/a {:href ""} (dom/img {:src "http://i.imgur.com/Qr71crq.jpg"}))
+          (dom/div :.info (dom/a :.author {:href ""} "Eric Simons") (dom/span :.date "January 20th"))
+          (dom/button
+            :.btn.btn-sm.btn-outline-secondary
+            (dom/i :.ion-plus-round)
+            "Follow Eric Simons"
+            (dom/span :.counter "(10)"))
+          (dom/button :.btn.btn-sm.btn-outline-primary (dom/i :.ion-heart) "Favorite Post" (dom/span :.counter "(29)")))))
+    (dom/div
+      :.container.page
+      (dom/div
+        :.row.article-content
+        (dom/div
+          :.col-md-12
+          body))
+      (dom/hr)
+      (dom/div
+        :.article-actions
+        (dom/div
+          :.article-meta
+          (dom/a {:href "profile.html"} (dom/img {:src "http://i.imgur.com/Qr71crq.jpg"}))
+          (dom/div :.info (dom/a :.author {:href ""} "Eric Simons") (dom/span :.date "January 20th"))
+          (dom/button
+            :.btn.btn-sm.btn-outline-secondary
+            (dom/i :.ion-plus-round)
+            "Follow Eric Simons"
+            (dom/span :.counter "(10)"))
+          (dom/button :.btn.btn-sm.btn-outline-primary (dom/i :.ion-heart) "Favorite Post" (dom/span :.counter "(29)"))))
+      (dom/div
+        :.row
+        #_(dom/div
+            :.col-xs-12.col-md-8.offset-md-2
+            (dom/form
+              :.card.comment-form
+              (dom/div :.card-block (dom/textarea :.form-control {:placeholder "Write a comment...", :rows "3"}))
+              (dom/div)
+              :.card-footer
+              (dom/img :.comment-author-img {:src "http://i.imgur.com/Qr71crq.jpg"})
+              (dom/button :.btn.btn-sm.btn-primary "Post Comment"))
+            (dom/div
+              :.card
+              (dom/div)
+              :.card-block
+              (dom/p :.card-text "With supporting text below as a natural lead-in to additional content.")
+              (dom/div)
+              :.card-footer
+              (dom/a :.comment-author {:href ""} (dom/img :.comment-author-img {:src "http://i.imgur.com/Qr71crq.jpg"}))
+              (dom/a :.comment-author {:href ""} "Jacob Schmidt")
+              (dom/span :.date-posted "Dec 29th"))
+            (dom/div
+              :.card
+              (dom/div)
+              :.card-block
+              (dom/p :.card-text "With supporting text below as a natural lead-in to additional content.")
+              (dom/div)
+              :.card-footer
+              (dom/a :.comment-author {:href ""} (dom/img :.comment-author-img {:src "http://i.imgur.com/Qr71crq.jpg"}))
+              (dom/a :.comment-author {:href ""} "Jacob Schmidt")
+              (dom/span :.date-posted "Dec 29th")
+              (dom/span :.mod-options (dom/i :.ion-edit) (dom/i :.ion-trash-a))))))))
+
+
 (defsc SignIn [this props]
   {:ident         (fn [] [:component/id ::sign-in])
    :query         []
@@ -258,7 +342,7 @@
               "Sign in")))))))
 
 (defrouter TopRouter [this {:keys [current-state]}]
-  {:router-targets [Feed SignIn SignUp]}
+  {:router-targets [Feed SignIn SignUp Article]}
   (case current-state
     :pending (dom/div "Loading...")
     :failed (dom/div "Loading seems to have failed. Try another route.")
@@ -294,10 +378,10 @@
             (dom/a
               {:onClick #(dr/change-route this [href])
                :classes ["nav-link"
-                         (when  (some-> current-route
-                                        second
-                                        name
-                                        (= href))
+                         (when (some-> current-route
+                                       second
+                                       name
+                                       (= href))
                            "active")]}
               label)
             ;;TODO: Back to href
@@ -354,7 +438,16 @@
         <p!)))
 
 (def register
-  [(pc/resolver `popular-tags
+  [(pc/resolver `article
+                {::pc/input  #{:conduit.article/slug}
+                 ::pc/output [:conduit.article/body]}
+                (fn [ctx {:conduit.article/keys [slug]}]
+                  (async/go
+                    (let [result (async/<! (fetch ctx {::path (str "/articles/" slug)}))
+                          {:strs [article]} (js->clj result)
+                          {:strs [body]} article]
+                      {:conduit.article/body body}))))
+   (pc/resolver `popular-tags
                 {::pc/output [::popular-tags]}
                 (fn [ctx _]
                   (async/go
