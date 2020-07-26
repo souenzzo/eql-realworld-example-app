@@ -1,6 +1,6 @@
 # ![RealWorld Example App](logo.png)
 
-> ### [YOUR_FRAMEWORK] codebase containing real world examples (CRUD, auth, advanced patterns, etc) that adheres to the [RealWorld](https://github.com/gothinkster/realworld) spec and API.
+> ### eql-realworld-example-app codebase containing real world examples (CRUD, auth, advanced patterns, etc) that adheres to the [RealWorld](https://github.com/gothinkster/realworld) spec and API.
 
 
 ### [Demo](https://github.com/gothinkster/realworld)&nbsp;&nbsp;&nbsp;&nbsp;[RealWorld](https://github.com/gothinkster/realworld)
@@ -19,5 +19,6 @@ For more information on how to this works with other frontends/backends, head ov
 
 # Getting started
 
-> npm install, npm start, etc.
+> npm install
+> clj -A:dev:shadow-cljs watch conduit
 
