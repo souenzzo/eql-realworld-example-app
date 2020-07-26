@@ -132,7 +132,7 @@
           {:className "ion-heart"})
         favorites-count))
     (dom/button
-      {:onClick #(dr/change-route this ["article" slug])}
+      {:onClick #(dr/change-route! this ["article" slug])}
       slug)
     (dom/a
       {:className "preview-link"
@@ -316,17 +316,21 @@
 (defsc Redirect [this {:conduit.redirect/keys [path]}]
   {:query [:conduit.redirect/path]}
   (dom/button
-    {:onClick #(dr/change-route this path)}
+    {:onClick #(dr/change-route! this path)}
     (pr-str path)))
 
 (def ui-redirect (comp/factory Redirect))
+
+(declare Header)
 
 (defsc SignIn [this {:conduit.user.login/keys [loading?
                                                errors
                                                redirect]}]
   {:ident         (fn [] [:component/id ::sign-in])
    :query         [:conduit.user.login/loading?
+                   ::top-routes
                    {:conduit.user.login/errors (comp/get-query ErrorMessage)}
+                   {:>/header (comp/get-query Header)}
                    {:conduit.user.login/redirect (comp/get-query Redirect)}]
    :route-segment ["sign-in"]}
   (dom/div
@@ -400,45 +404,43 @@
 
 (def ui-top-router (comp/factory TopRouter))
 
-(defsc Header [this {:keys [com.fulcrologic.fulcro.routing.dynamic-routing/current-route]}]
-  {:query         [:com.fulcrologic.fulcro.routing.dynamic-routing/current-route]
+(defsc Header [this {::keys [top-routes]}]
+  {:query         [::dr/current-route
+                   ::top-routes]
    :ident         (fn []
-                    [:com.fulcrologic.fulcro.routing.dynamic-routing/id
-                     :conduit.client/TopRouter])
+                    [::dr/id :conduit.client/TopRouter])
    :initial-state (fn [_]
-                    (comp/get-initial-state TopRouter _))}
-  (dom/nav
-    {:className "navbar navbar-light"}
-    (dom/div
-      {:className "container"}
-      (dom/a {:className "navbar-brand"
-              :href      "index.html"}
-             "conduit")
-      (dom/ul
-        {:className "nav navbar-nav pull-xs-right"}
-        (for [{::keys [label href]} [{::label "Home"
-                                      ::href  "feed"}
-                                     {::label "Sign Up"
-                                      ::href  "sign-up"}
-                                     {::label "Sign In"
-                                      ::href  "sign-in"}]]
-          (dom/li
-            {:key       href
-             :className "nav-item"}
-            (dom/a
-              {:onClick #(dr/change-route this [href])
-               :classes ["nav-link"
-                         (when (some-> current-route
-                                       second
-                                       name
-                                       (= href))
-                           "active")]}
-              label)
-            ;;TODO: Back to href
-            #_(dom/a
-                {:href      href
-                 :className "nav-link active"}
-                label)))))))
+                    {::top-routes [{::label "Home"
+                                    ::path  ["feed"]}
+                                   {::label "Sign Up"
+                                    ::path  ["sign-up"]}
+                                   {::label "Sign In"
+                                    ::path  ["sign-in"]}]})}
+  (let [current-route (dr/current-route this)]
+    (dom/nav
+      {:className "navbar navbar-light"}
+      (dom/div
+        {:className "container"}
+        (dom/a {:className "navbar-brand"
+                :href      "index.html"}
+               "conduit")
+        (dom/ul
+          {:className "nav navbar-nav pull-xs-right"}
+          (for [{::keys [label path]} top-routes]
+            (dom/li
+              {:key       label
+               :className "nav-item"}
+              (dom/a
+                {:onClick #(dr/change-route! this path)
+                 :classes ["nav-link"
+                           (when (= current-route path)
+                             "active")]}
+                label)
+              ;;TODO: Back to href
+              #_(dom/a
+                  {:href      href
+                   :className "nav-link active"}
+                  label))))))))
 
 (def ui-header (comp/factory Header))
 
@@ -476,7 +478,7 @@
 (defn client-did-mount
   "Must be used as :client-did-mount parameter of app creation, or called just after you mount the app."
   [app]
-  (dr/change-route app ["feed"]))
+  (dr/change-route! app ["feed"]))
 
 
 (defn fetch
@@ -492,18 +494,39 @@
           <p!))))
 
 (def register
-  [(pc/mutation `conduit.user/login
+  [(pc/resolver `top-routes
+                {::pc/output [::top-routes]}
+                (fn [{::keys [authed-user]} _]
+                  (let [username (-> @authed-user (get "username"))]
+                    {::top-routes (if username
+                                    [{::label "Home"
+                                      ::path  ["feed"]}
+                                     {::label "New Post"
+                                      ::path  ["new-post"]}
+                                     {::label "Settings"
+                                      ::path  ["settings"]}
+                                     {::label username
+                                      ::path  ["user" username]}]
+                                    [{::label "Home"
+                                      ::path  ["feed"]}
+                                     {::label "Sign Up"
+                                      ::path  ["sign-up"]}
+                                     {::label "Sign In"
+                                      ::path  ["sign-in"]}])})))
+   (pc/mutation `conduit.user/login
                 {::pc/params [:conduit.user/password
                               :conduit.user/email]
                  ::pc/output []}
-                (fn [env {:conduit.user/keys [email password]}]
+                (fn [{::keys [authed-user]
+                      :as    env} {:conduit.user/keys [email password]}]
                   (let [body #js {:user #js{:email    email
                                             :password password}}]
                     (async/go
                       (let [response (async/<! (fetch env {::path   "/users/login"
                                                            ::method "POST"
                                                            ::body   (js/JSON.stringify body)}))
-                            {:strs [errors]} (js->clj response)]
+                            {:strs [errors user]} (js->clj response)]
+                        (reset! authed-user user)
                         {:conduit.user.login/loading? false
                          :conduit.user.login/errors   []
                          :conduit.user.login/redirect (when (empty? errors)
@@ -560,12 +583,14 @@
 
 (def parser
   (p/parallel-parser
-    {::p/plugins [(pc/connect-plugin {::pc/register register})]
+    {::p/plugins [(pc/connect-plugin {::pc/register register})
+                  p/elide-special-outputs-plugin]
      ::p/mutate  pc/mutate-async}))
 
 (def remote
   {:transmit!               transmit!
    :parser                  parser
+   ::authed-user            (atom nil)
    ::api-url                "https://conduit.productionready.io/api"
    ::p/reader               [p/map-reader
                              pc/parallel-reader
