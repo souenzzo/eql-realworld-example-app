@@ -182,7 +182,7 @@
 (defsc SignUp [this props]
   {:ident         (fn [] [:component/id ::sign-up])
    :query         []
-   :route-segment ["sign-up"]}
+   :route-segment ["register"]}
   (dom/div
     {:className "auth-page"}
     (dom/div
@@ -332,7 +332,7 @@
                    {:conduit.user.login/errors (comp/get-query ErrorMessage)}
                    {:>/header (comp/get-query Header)}
                    {:conduit.user.login/redirect (comp/get-query Redirect)}]
-   :route-segment ["sign-in"]}
+   :route-segment ["login"]}
   (dom/div
     {:className "auth-page"}
     (dom/div
@@ -394,9 +394,189 @@
           (-> env
               (m/returning SignIn))))
 
+(defsc NewPost [this props]
+  {:ident         (fn []
+                    [:component/id ::new-post])
+   :query         []
+   :route-segment ["editor"]}
+  (dom/div
+    :.editor-page
+    (dom/div
+      :.container.page
+      (dom/div
+        :.row
+        (dom/div
+          :.col-md-10.offset-md-1.col-xs-12
+          (dom/form
+            (dom/fieldset
+              (dom/fieldset
+                :.form-group
+                (dom/input
+                  :.form-control.form-control-lg
+                  {:type "text", :placeholder "Article Title"}))
+              (dom/fieldset
+                :.form-group
+                (dom/input
+                  :.form-control
+                  {:type "text", :placeholder "What's this article about?"}))
+              (dom/fieldset
+                :.form-group
+                (dom/textarea
+                  :.form-control
+                  {:rows "8", :placeholder "Write your article (in markdown)"}))
+              (dom/fieldset
+                :.form-group
+                (dom/input
+                  :.form-control
+                  {:type "text", :placeholder "Enter tags"}))
+              (dom/div :.tag-list)
+              (dom/button
+                :.btn.btn-lg.pull-xs-right.btn-primary
+                {:type "button"}
+                "Publish Article"))))))))
+
+(defsc Settings [this props]
+  {:ident         (fn []
+                    [:component/id ::settings])
+   :query         []
+   :route-segment ["settings"]}
+  (dom/div
+    :.settings-page
+    (dom/div
+      :.container.page
+      (dom/div
+        :.row
+        (dom/div
+          :.col-md-6.offset-md-3.col-xs-12
+          (dom/h1 :.text-xs-center "Your Settings")
+          (dom/form)
+          (dom/fieldset
+            (dom/fieldset
+              :.form-group
+              (dom/input
+                :.form-control
+                {:type "text", :placeholder "URL of profile picture"}))
+            (dom/fieldset
+              :.form-group
+              (dom/input
+                :.form-control.form-control-lg
+                {:type "text", :placeholder "Your Name"}))
+            (dom/fieldset
+              :.form-group
+              (dom/textarea
+                :.form-control.form-control-lg
+                {:rows "8", :placeholder "Short bio about you"}))
+            (dom/fieldset
+              :.form-group
+              (dom/input
+                :.form-control.form-control-lg
+                {:type "text", :placeholder "Email"}))
+            (dom/fieldset
+              :.form-group
+              (dom/input
+                :.form-control.form-control-lg
+                {:type "password", :placeholder "Password"}))
+            (dom/button
+              :.btn.btn-lg.btn-primary.pull-xs-right
+              "Update Settings")))))))
+
+(defsc Profile [this props]
+  {:query         [:conduit.user/id
+                   :conduit.user/email
+                   :conduit.user/username]
+   :ident         :conduit.user/username
+   :route-segment ["profile" :conduit.user/username]}
+  (dom/div
+    :.profile-page
+    (dom/div
+      :.user-info
+      (dom/div
+        :.container
+        (dom/div
+          :.row
+          (dom/div
+            :.col-xs-12.col-md-10.offset-md-1
+            (dom/img :.user-img {:src "http://i.imgur.com/Qr71crq.jpg"})
+            (dom/h4 "Eric Simons")
+            (dom/p
+              "Cofounder @GoThinkster, lived in Aol"
+              "&#39;"
+              "s HQ for a few months, kinda looks like Peeta from the Hunger Games")
+            (dom/button
+              :.btn.btn-sm.btn-outline-secondary.action-btn)
+            (dom/i :.ion-plus-round
+
+                   "Follow Eric Simons")))))
+    (dom/div
+      :.container
+      (dom/div
+        :.row
+        (dom/div
+          :.col-xs-12.col-md-10.offset-md-1
+          (dom/div
+            :.articles-toggle
+            (dom/ul
+              :.nav.nav-pills.outline-active
+              (dom/li
+                :.nav-item
+                (dom/a :.nav-link.active {:href ""} "My Articles"))
+              (dom/li
+                :.nav-item)
+              (dom/a :.nav-link {:href ""} "Favorited Articles")
+              (dom/div
+                :.article-preview
+                (dom/div
+                  :.article-meta))
+              (dom/a
+                {:href ""}
+                (dom/img {:src "http://i.imgur.com/Qr71crq.jpg"}))
+              (dom/div
+                :.info)
+              (dom/a :.author {:href ""} "Eric Simons")
+              (dom/span :.date "January 20th")
+              (dom/button
+                :.btn.btn-outline-primary.btn-sm.pull-xs-right
+                (dom/i :.ion-heart)
+
+                "29")
+              (dom/a
+                :.preview-link
+                {:href ""}
+                (dom/h1 "How to build webapps that scale"))
+              (dom/p "This is the description for the post.")
+              (dom/span "Read more...")
+              (dom/div
+                :.article-preview
+                (dom/div
+                  :.article-meta))
+              (dom/a
+                {:href ""})
+              (dom/img {:src "http://i.imgur.com/N4VcUeJ.jpg"})
+              (dom/div
+                :.info)
+              (dom/a :.author {:href ""} "Albert Pai")
+              (dom/span :.date "January 20th")
+              (dom/button
+                :.btn.btn-outline-primary.btn-sm.pull-xs-right)
+              (dom/i :.ion-heart
+                     "32")
+              (dom/a
+                :.preview-link
+                {:href ""})
+              (dom/h1
+                "The song you won"
+                "&#39;"
+                "t ever stop singing. No matter how hard you try.")
+              (dom/p "This is the description for the post.")
+              (dom/span "Read more...")
+              (dom/ul
+                :.tag-list
+                (dom/li :.tag-default.tag-pill.tag-outline "Music")
+                (dom/li :.tag-default.tag-pill.tag-outline "Song")))))))))
+
 
 (defrouter TopRouter [this {:keys [current-state]}]
-  {:router-targets [Feed SignIn SignUp Article]}
+  {:router-targets [Feed SignIn SignUp Article NewPost Settings]}
   (case current-state
     :pending (dom/div "Loading...")
     :failed (dom/div "Loading seems to have failed. Try another route.")
@@ -413,9 +593,9 @@
                     {::top-routes [{::label "Home"
                                     ::path  ["feed"]}
                                    {::label "Sign Up"
-                                    ::path  ["sign-up"]}
+                                    ::path  ["register"]}
                                    {::label "Sign In"
-                                    ::path  ["sign-in"]}]})}
+                                    ::path  ["login"]}]})}
   (let [current-route (dr/current-route this)]
     (dom/nav
       {:className "navbar navbar-light"}
@@ -502,17 +682,17 @@
                                     [{::label "Home"
                                       ::path  ["feed"]}
                                      {::label "New Post"
-                                      ::path  ["new-post"]}
+                                      ::path  ["editor"]}
                                      {::label "Settings"
                                       ::path  ["settings"]}
                                      {::label username
-                                      ::path  ["user" username]}]
+                                      ::path  ["profile" username]}]
                                     [{::label "Home"
                                       ::path  ["feed"]}
                                      {::label "Sign Up"
-                                      ::path  ["sign-up"]}
+                                      ::path  ["register"]}
                                      {::label "Sign In"
-                                      ::path  ["sign-in"]}])})))
+                                      ::path  ["login"]}])})))
    (pc/mutation `conduit.user/login
                 {::pc/params [:conduit.user/password
                               :conduit.user/email]
