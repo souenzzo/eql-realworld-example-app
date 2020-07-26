@@ -4,5 +4,5 @@
                       :output-dir "target"
                       :asset-path "/"
                       :modules    {:main {:init-fn conduit.client/init-fn}}
-                      :devtools   {:preloads   [conduit.user]
-                                   :after-load conduit.user/after-load}}}}
+                      :devtools   {:preloads   [conduit.dev]
+                                   :after-load conduit.dev/after-load}}}}

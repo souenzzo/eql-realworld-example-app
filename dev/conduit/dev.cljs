@@ -1,4 +1,4 @@
-(ns conduit.user
+(ns conduit.dev
   (:require [com.fulcrologic.fulcro.inspect.preload]
             [devtools.preload]
             [conduit.client :as client]))

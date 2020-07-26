@@ -10,7 +10,11 @@
     [com.wsscode.pathom.core :as p]
     [com.wsscode.pathom.connect :as pc]
     [edn-query-language.core :as eql]
-    [clojure.core.async :as async]))
+    [clojure.core.async :as async]
+    [goog.object :as gobj]
+    [com.fulcrologic.fulcro.mutations :as m]
+    [taoensso.timbre :as log]
+    [clojure.string :as string]))
 
 ;; TODO: Create a lib for "pathom remote"
 (defn transmit!
@@ -19,6 +23,7 @@
                             result-handler active?]}]
   (let [query (eql/ast->query ast)
         result (parser env query)]
+    (log/info :query query)
     (async/go
       (result-handler {:body                 (async/<! result)
                        :original-transaction ast
@@ -300,10 +305,29 @@
               (dom/span :.date-posted "Dec 29th")
               (dom/span :.mod-options (dom/i :.ion-edit) (dom/i :.ion-trash-a))))))))
 
+(defsc ErrorMessage [this {:conduit.error/keys [message]}]
+  {:query [:conduit.error/message]
+   :ident :conduit.error/message}
+  (dom/li {}
+          message))
 
-(defsc SignIn [this props]
+(def ui-error-message (comp/factory ErrorMessage {:keyfn :conduit.error/message}))
+
+(defsc Redirect [this {:conduit.redirect/keys [path]}]
+  {:query [:conduit.redirect/path]}
+  (dom/button
+    {:onClick #(dr/change-route this path)}
+    (pr-str path)))
+
+(def ui-redirect (comp/factory Redirect))
+
+(defsc SignIn [this {:conduit.user.login/keys [loading?
+                                               errors
+                                               redirect]}]
   {:ident         (fn [] [:component/id ::sign-in])
-   :query         []
+   :query         [:conduit.user.login/loading?
+                   {:conduit.user.login/errors (comp/get-query ErrorMessage)}
+                   {:conduit.user.login/redirect (comp/get-query Redirect)}]
    :route-segment ["sign-in"]}
   (dom/div
     {:className "auth-page"}
@@ -315,31 +339,57 @@
           {:className "col-md-6 offset-md-3 col-xs-12"}
           (dom/h1
             {:className "text-xs-center"}
-            "Sign in")
+            "Sign In")
           (dom/p
             {:className "text-xs-center"}
             (dom/a
               {:href ""}
-              "Have an account?"))
+              "Need an account?"))
           (dom/ul
             {:className "error-messages"}
-            (dom/li "That email is already taken"))
+            (map ui-error-message errors))
+          (when redirect
+            (ui-redirect redirect))
           (dom/form
+            {:onSubmit (fn [e]
+                         (.preventDefault e)
+                         (let [form (-> e .-target)
+                               email (-> form (gobj/get "email") .-value)
+                               password (-> form (gobj/get "password") .-value)]
+                           (comp/transact! this `[(conduit.user/login ~{:conduit.user/email    email
+                                                                        :conduit.user/password password})])))}
             (dom/fieldset
-              {:className "form-group"}
-              (dom/input
-                {:className   "form-control form-control-lg"
-                 :type        "text"
-                 :placeholder "Email"}))
-            (dom/fieldset
-              {:className "form-group"}
-              (dom/input
-                {:className   "form-control form-control-lg"
-                 :type        "password",
-                 :placeholder "Password"}))
-            (dom/button
-              {:className "btn btn-lg btn-primary pull-xs-right"}
-              "Sign in")))))))
+              (dom/fieldset
+                {:className "form-group"}
+                (dom/input
+                  {:className   "form-control form-control-lg"
+                   :type        "text"
+                   :name        "email"
+                   :placeholder "Email"}))
+              (dom/fieldset
+                {:className "form-group"}
+                (dom/input
+                  {:className   "form-control form-control-lg"
+                   :type        "password",
+                   :name        "password"
+                   :placeholder "Password"}))
+              (dom/button
+                {:className "btn btn-lg btn-primary pull-xs-right"
+                 :disabled  loading?}
+                (if loading?
+                  "loadgin ..."
+                  "Sign in")))))))))
+
+(m/defmutation conduit.user/login
+  [{:conduit.user/keys [email password]}]
+  (action [{:keys [ref state] :as env}]
+          (swap! state (fn [st]
+                         (-> st
+                             (update-in ref assoc :conduit.user.login/loading? true)))))
+  (remote [env]
+          (-> env
+              (m/returning SignIn))))
+
 
 (defrouter TopRouter [this {:keys [current-state]}]
   {:router-targets [Feed SignIn SignUp Article]}
@@ -430,15 +480,36 @@
 
 
 (defn fetch
-  [{::keys [api-url]} {::keys [path]}]
-  (async/go
-    (-> (js/fetch (str api-url path))
-        <p!
-        .json
-        <p!)))
+  [{::keys [api-url]} {::keys [path method body]}]
+  (let [opts (when body
+               #js {:method  method
+                    :headers #js{"Content-Type" "application/json"}
+                    :body    body})]
+    (async/go
+      (-> (js/fetch (str api-url path) opts)
+          <p!
+          .json
+          <p!))))
 
 (def register
-  [(pc/resolver `article
+  [(pc/mutation `conduit.user/login
+                {::pc/params [:conduit.user/password
+                              :conduit.user/email]
+                 ::pc/output []}
+                (fn [env {:conduit.user/keys [email password]}]
+                  (let [body #js {:user #js{:email    email
+                                            :password password}}]
+                    (async/go
+                      (let [response (async/<! (fetch env {::path   "/users/login"
+                                                           ::method "POST"
+                                                           ::body   (js/JSON.stringify body)}))
+                            {:strs [errors]} (js->clj response)]
+                        {:conduit.user.login/loading? false
+                         :conduit.user.login/errors   []
+                         :conduit.user.login/redirect (when (empty? errors)
+                                                        {:conduit.redirect/path ["feed"]})})))))
+
+   (pc/resolver `article
                 {::pc/input  #{:conduit.article/slug}
                  ::pc/output [:conduit.article/body]}
                 (fn [ctx {:conduit.article/keys [slug]}]
@@ -489,7 +560,8 @@
 
 (def parser
   (p/parallel-parser
-    {::p/plugins [(pc/connect-plugin {::pc/register register})]}))
+    {::p/plugins [(pc/connect-plugin {::pc/register register})]
+     ::p/mutate  pc/mutate-async}))
 
 (def remote
   {:transmit!               transmit!
