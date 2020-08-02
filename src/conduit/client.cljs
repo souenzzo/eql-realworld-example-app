@@ -325,6 +325,8 @@
                                                   redirect]}]
   {:ident         (fn [] [:component/id ::sign-in])
    :query         [:conduit.profile.login/loading?
+                   :conduit.profile/username
+                   :conduit.profile/email
                    ::top-routes
                    {:conduit.profile.login/errors (comp/get-query ErrorMessage)}
                    {:>/header (comp/get-query Header)}
@@ -389,7 +391,17 @@
                              (update-in ref assoc :conduit.profile.login/loading? true)))))
   (remote [env]
           (-> env
-              (m/returning SignIn))))
+              (m/returning SignIn)))
+  (ok-action [{:keys [state result]}]
+             (swap! state (fn [st]
+                            (-> st
+                                (assoc-in [:component/id
+                                           ::settings
+                                           ::me]
+                                          (-> result
+                                              :body
+                                              (get `conduit.profile/login)
+                                              (find :conduit.profile/username))))))))
 
 (defsc NewPost [this props]
   {:ident         (fn []
@@ -432,11 +444,18 @@
                 {:type "button"}
                 "Publish Article"))))))))
 
-(defsc Settings [this props]
-  {:ident         (fn []
-                    [:component/id ::settings])
-   :query         []
-   :route-segment ["settings"]}
+(defsc Settings [this {:conduit.profile/keys [image username bio email]}]
+  {:ident         :conduit.profile/username
+   :query         [:conduit.profile/bio
+                   :conduit.profile/username
+                   :conduit.profile/email
+                   :conduit.profile/image]
+   :route-segment ["settings" :conduit.profile/username]
+   :will-enter    (fn [app {:conduit.profile/keys [username]}]
+                    (dr/route-deferred [:conduit.profile/username username]
+                                       #(df/load! app [:conduit.profile/username username] Settings
+                                                  {:post-mutation        `dr/target-ready
+                                                   :post-mutation-params {:target [:conduit.profile/username username]}})))}
   (dom/div
     :.settings-page
     (dom/div
@@ -446,40 +465,51 @@
         (dom/div
           :.col-md-6.offset-md-3.col-xs-12
           (dom/h1 :.text-xs-center "Your Settings")
-          (dom/form)
-          (dom/fieldset
+          (dom/form
+            {:onSubmit (fn [e]
+                         (.preventDefault e)
+                         (js/alert "TODO"))}
             (dom/fieldset
-              :.form-group
-              (dom/input
-                :.form-control
-                {:type "text", :placeholder "URL of profile picture"}))
-            (dom/fieldset
-              :.form-group
-              (dom/input
-                :.form-control.form-control-lg
-                {:type "text", :placeholder "Your Name"}))
-            (dom/fieldset
-              :.form-group
-              (dom/textarea
-                :.form-control.form-control-lg
-                {:rows "8", :placeholder "Short bio about you"}))
-            (dom/fieldset
-              :.form-group
-              (dom/input
-                :.form-control.form-control-lg
-                {:type "text", :placeholder "Email"}))
-            (dom/fieldset
-              :.form-group
-              (dom/input
-                :.form-control.form-control-lg
-                {:type "password", :placeholder "Password"}))
-            (dom/button
-              :.btn.btn-lg.btn-primary.pull-xs-right
-              "Update Settings")))))))
+              (dom/fieldset
+                :.form-group
+                (dom/input
+                  :.form-control
+                  {:type         "text",
+                   :defaultValue image
+                   :placeholder  "URL of profile picture"}))
+              (dom/fieldset
+                :.form-group
+                (dom/input
+                  :.form-control.form-control-lg
+                  {:type         "text",
+                   :defaultValue username
+                   :placeholder  "Your Name"}))
+              (dom/fieldset
+                :.form-group
+                (dom/textarea
+                  :.form-control.form-control-lg
+                  {:rows         "8",
+                   :defaultValue bio
+                   :placeholder  "Short bio about you"}))
+              (dom/fieldset
+                :.form-group
+                (dom/input
+                  :.form-control.form-control-lg
+                  {:type         "text",
+                   :defaultValue email
+                   :placeholder  "Email"}))
+              (dom/fieldset
+                :.form-group
+                (dom/input
+                  :.form-control.form-control-lg
+                  {:type "password", :placeholder "Password"}))
+              (dom/button
+                :.btn.btn-lg.btn-primary.pull-xs-right
+                "Update Settings"))))))))
+
 
 (defsc Profile [this {:conduit.profile/keys [bio username image articles]}]
-  {:query         [:conduit.profile/id
-                   :conduit.profile/bio
+  {:query         [:conduit.profile/bio
                    :conduit.profile/username
                    :conduit.profile/image
                    {:conduit.profile/articles (comp/get-query ArticlePreview)}]
@@ -634,7 +664,7 @@
                                      {::label "New Post"
                                       ::path  ["editor"]}
                                      {::label "Settings"
-                                      ::path  ["settings"]}
+                                      ::path  ["settings" username]}
                                      {::label username
                                       ::path  ["profile" username]}]
                                     [{::label "Home"
@@ -655,9 +685,12 @@
                       (let [response (async/<! (fetch env {::path   "/users/login"
                                                            ::method "POST"
                                                            ::body   (js/JSON.stringify body)}))
-                            {:strs [errors user]} (js->clj response)]
+                            {:strs [errors user]} (js->clj response)
+                            {:strs [username]} user]
                         (reset! authed-user user)
-                        {:conduit.profile.login/loading? false
+                        {:conduit.profile/username       username
+                         :conduit.profile/email          email
+                         :conduit.profile.login/loading? false
                          :conduit.profile.login/errors   []
                          :conduit.profile.login/redirect (when (empty? errors)
                                                            {:conduit.redirect/path ["feed"]})})))))
