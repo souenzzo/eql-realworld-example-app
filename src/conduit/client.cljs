@@ -15,7 +15,6 @@
     [com.fulcrologic.fulcro.mutations :as m]
     [taoensso.timbre :as log]
     [clojure.string :as string]))
-
 ;; TODO: Create a lib for "pathom remote"
 (defn transmit!
   [{:keys [parser]
@@ -28,8 +27,6 @@
       (result-handler {:body                 (async/<! result)
                        :original-transaction ast
                        :status-code          200}))))
-
-
 
 (defsc TagPill [this {:conduit.tag/keys [tag]}]
   {:query [:conduit.tag/tag]
@@ -323,15 +320,15 @@
 
 (declare Header)
 
-(defsc SignIn [this {:conduit.user.login/keys [loading?
-                                               errors
-                                               redirect]}]
+(defsc SignIn [this {:conduit.profile.login/keys [loading?
+                                                  errors
+                                                  redirect]}]
   {:ident         (fn [] [:component/id ::sign-in])
-   :query         [:conduit.user.login/loading?
+   :query         [:conduit.profile.login/loading?
                    ::top-routes
-                   {:conduit.user.login/errors (comp/get-query ErrorMessage)}
+                   {:conduit.profile.login/errors (comp/get-query ErrorMessage)}
                    {:>/header (comp/get-query Header)}
-                   {:conduit.user.login/redirect (comp/get-query Redirect)}]
+                   {:conduit.profile.login/redirect (comp/get-query Redirect)}]
    :route-segment ["login"]}
   (dom/div
     {:className "auth-page"}
@@ -360,8 +357,8 @@
                          (let [form (-> e .-target)
                                email (-> form (gobj/get "email") .-value)
                                password (-> form (gobj/get "password") .-value)]
-                           (comp/transact! this `[(conduit.user/login ~{:conduit.user/email    email
-                                                                        :conduit.user/password password})])))}
+                           (comp/transact! this `[(conduit.profile/login ~{:conduit.profile/email    email
+                                                                           :conduit.profile/password password})])))}
             (dom/fieldset
               (dom/fieldset
                 {:className "form-group"}
@@ -384,12 +381,12 @@
                   "loadgin ..."
                   "Sign in")))))))))
 
-(m/defmutation conduit.user/login
-  [{:conduit.user/keys [email password]}]
+(m/defmutation conduit.profile/login
+  [{:conduit.profile/keys [email password]}]
   (action [{:keys [ref state] :as env}]
           (swap! state (fn [st]
                          (-> st
-                             (update-in ref assoc :conduit.user.login/loading? true)))))
+                             (update-in ref assoc :conduit.profile.login/loading? true)))))
   (remote [env]
           (-> env
               (m/returning SignIn))))
@@ -480,12 +477,19 @@
               :.btn.btn-lg.btn-primary.pull-xs-right
               "Update Settings")))))))
 
-(defsc Profile [this props]
-  {:query         [:conduit.user/id
-                   :conduit.user/email
-                   :conduit.user/username]
-   :ident         :conduit.user/username
-   :route-segment ["profile" :conduit.user/username]}
+(defsc Profile [this {:conduit.profile/keys [bio username image articles]}]
+  {:query         [:conduit.profile/id
+                   :conduit.profile/bio
+                   :conduit.profile/username
+                   :conduit.profile/image
+                   {:conduit.profile/articles (comp/get-query ArticlePreview)}]
+   :ident         :conduit.profile/username
+   :route-segment ["profile" :conduit.profile/username]
+   :will-enter    (fn [app {:conduit.profile/keys [username]}]
+                    (dr/route-deferred [:conduit.profile/username username]
+                                       #(df/load! app [:conduit.profile/username username] Profile
+                                                  {:post-mutation        `dr/target-ready
+                                                   :post-mutation-params {:target [:conduit.profile/username username]}})))}
   (dom/div
     :.profile-page
     (dom/div
@@ -496,17 +500,14 @@
           :.row
           (dom/div
             :.col-xs-12.col-md-10.offset-md-1
-            (dom/img :.user-img {:src "http://i.imgur.com/Qr71crq.jpg"})
-            (dom/h4 "Eric Simons")
+            (dom/img :.user-img {:src image})
+            (dom/h4 username)
             (dom/p
-              "Cofounder @GoThinkster, lived in Aol"
-              "&#39;"
-              "s HQ for a few months, kinda looks like Peeta from the Hunger Games")
+              bio)
             (dom/button
               :.btn.btn-sm.btn-outline-secondary.action-btn)
             (dom/i :.ion-plus-round
-
-                   "Follow Eric Simons")))))
+                   (str "Follow " username))))))
     (dom/div
       :.container
       (dom/div
@@ -522,61 +523,11 @@
                 (dom/a :.nav-link.active {:href ""} "My Articles"))
               (dom/li
                 :.nav-item)
-              (dom/a :.nav-link {:href ""} "Favorited Articles")
-              (dom/div
-                :.article-preview
-                (dom/div
-                  :.article-meta))
-              (dom/a
-                {:href ""}
-                (dom/img {:src "http://i.imgur.com/Qr71crq.jpg"}))
-              (dom/div
-                :.info)
-              (dom/a :.author {:href ""} "Eric Simons")
-              (dom/span :.date "January 20th")
-              (dom/button
-                :.btn.btn-outline-primary.btn-sm.pull-xs-right
-                (dom/i :.ion-heart)
-
-                "29")
-              (dom/a
-                :.preview-link
-                {:href ""}
-                (dom/h1 "How to build webapps that scale"))
-              (dom/p "This is the description for the post.")
-              (dom/span "Read more...")
-              (dom/div
-                :.article-preview
-                (dom/div
-                  :.article-meta))
-              (dom/a
-                {:href ""})
-              (dom/img {:src "http://i.imgur.com/N4VcUeJ.jpg"})
-              (dom/div
-                :.info)
-              (dom/a :.author {:href ""} "Albert Pai")
-              (dom/span :.date "January 20th")
-              (dom/button
-                :.btn.btn-outline-primary.btn-sm.pull-xs-right)
-              (dom/i :.ion-heart
-                     "32")
-              (dom/a
-                :.preview-link
-                {:href ""})
-              (dom/h1
-                "The song you won"
-                "&#39;"
-                "t ever stop singing. No matter how hard you try.")
-              (dom/p "This is the description for the post.")
-              (dom/span "Read more...")
-              (dom/ul
-                :.tag-list
-                (dom/li :.tag-default.tag-pill.tag-outline "Music")
-                (dom/li :.tag-default.tag-pill.tag-outline "Song")))))))))
-
+              (dom/a :.nav-link {:href ""} "Favorited Articles"))))
+        (map ui-article-preview articles)))))
 
 (defrouter TopRouter [this {:keys [current-state]}]
-  {:router-targets [Feed SignIn SignUp Article NewPost Settings]}
+  {:router-targets [Feed SignIn SignUp Article NewPost Settings Profile]}
   (case current-state
     :pending (dom/div "Loading...")
     :failed (dom/div "Loading seems to have failed. Try another route.")
@@ -660,7 +611,6 @@
   [app]
   (dr/change-route! app ["feed"]))
 
-
 (defn fetch
   [{::keys [api-url]} {::keys [path method body]}]
   (let [opts (when body
@@ -693,12 +643,12 @@
                                       ::path  ["register"]}
                                      {::label "Sign In"
                                       ::path  ["login"]}])})))
-   (pc/mutation `conduit.user/login
-                {::pc/params [:conduit.user/password
-                              :conduit.user/email]
+   (pc/mutation `conduit.profile/login
+                {::pc/params [:conduit.profile/password
+                              :conduit.profile/email]
                  ::pc/output []}
                 (fn [{::keys [authed-user]
-                      :as    env} {:conduit.user/keys [email password]}]
+                      :as    env} {:conduit.profile/keys [email password]}]
                   (let [body #js {:user #js{:email    email
                                             :password password}}]
                     (async/go
@@ -707,10 +657,10 @@
                                                            ::body   (js/JSON.stringify body)}))
                             {:strs [errors user]} (js->clj response)]
                         (reset! authed-user user)
-                        {:conduit.user.login/loading? false
-                         :conduit.user.login/errors   []
-                         :conduit.user.login/redirect (when (empty? errors)
-                                                        {:conduit.redirect/path ["feed"]})})))))
+                        {:conduit.profile.login/loading? false
+                         :conduit.profile.login/errors   []
+                         :conduit.profile.login/redirect (when (empty? errors)
+                                                           {:conduit.redirect/path ["feed"]})})))))
 
    (pc/resolver `article
                 {::pc/input  #{:conduit.article/slug}
@@ -721,6 +671,49 @@
                           {:strs [article]} (js->clj result)
                           {:strs [body]} article]
                       {:conduit.article/body body}))))
+   (pc/resolver `profile
+                {::pc/input  #{:conduit.profile/username}
+                 ::pc/output [:conduit.profile/bio
+                              :conduit.profile/image
+                              :conduit.profile/following]}
+                (fn [ctx {:conduit.profile/keys [username]}]
+                  (async/go
+                    (let [result (async/<! (fetch ctx {::path (str "/profiles/" username)}))
+                          {:strs [profile]} (js->clj result)
+                          {:strs [bio image following]} profile]
+                      {:conduit.profile/bio       bio
+                       :conduit.profile/image     image
+                       :conduit.profile/following following}))))
+   (pc/resolver `profile/articles
+                {::pc/input  #{:conduit.profile/username}
+                 ::pc/output [:conduit.profile/articles]}
+                (fn [ctx {:conduit.profile/keys [username]}]
+                  (async/go
+                    (let [result (async/<! (fetch ctx {::path (str "/articles?author=" username "&limit=5&offset=0")}))
+                          {:strs [articles articlesCount]} (js->clj result)]
+                      {:conduit.profile/articles (for [{:strs [updatedAt body author createdAt favorited slug tagList favoritesCount title
+                                                               description]} articles
+                                                       :let [{:strs [bio
+                                                                     following
+                                                                     image
+                                                                     username]} author
+                                                             profile #:conduit.profile{:bio       bio
+                                                                                       :following following
+                                                                                       :image     image
+                                                                                       :username  username}]]
+                                                   (merge
+                                                     profile
+                                                     #:conduit.article{:updated-at      updatedAt
+                                                                       :body            body
+                                                                       :created-at      createdAt
+                                                                       :favorited?      favorited
+                                                                       :slug            slug
+                                                                       :tag-list        (for [tag tagList]
+                                                                                          {:conduit.tag/tag tag})
+                                                                       :favorites-count favoritesCount
+                                                                       :title           title
+                                                                       :description     description}))}))))
+
    (pc/resolver `popular-tags
                 {::pc/output [::popular-tags]}
                 (fn [ctx _]
@@ -786,4 +779,3 @@
 (defn ^:export init-fn
   []
   (app/mount! app Root node))
-
