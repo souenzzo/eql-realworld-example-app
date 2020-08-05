@@ -1,25 +1,25 @@
 (ns conduit.client
   (:require
-    [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
-    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
-    [com.fulcrologic.fulcro.dom :as dom]
-    [com.fulcrologic.fulcro.algorithms.tx-processing :as ftx]
-    [com.fulcrologic.fulcro.data-fetch :as df]
-    [cljs.core.async.interop :refer-macros [<p!]]
-    [com.fulcrologic.fulcro.application :as app]
-    [com.wsscode.pathom.core :as p]
-    [com.wsscode.pathom.connect :as pc]
-    [edn-query-language.core :as eql]
+    [clojure.core.async.interop :refer-macros [<p!]]
     [clojure.core.async :as async]
-    [goog.object :as gobj]
+    [clojure.string :as string]
+    [com.fulcrologic.fulcro.algorithms.tx-processing :as ftx]
+    [com.fulcrologic.fulcro.application :as app]
+    [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+    [com.fulcrologic.fulcro.data-fetch :as df]
+    [com.fulcrologic.fulcro.dom :as dom]
     [com.fulcrologic.fulcro.mutations :as m]
-    [taoensso.timbre :as log]
-    [clojure.string :as string]))
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
+    [com.wsscode.pathom.connect :as pc]
+    [com.wsscode.pathom.core :as p]
+    [edn-query-language.core :as eql]
+    [goog.object :as gobj]
+    [taoensso.timbre :as log]))
 ;; TODO: Create a lib for "pathom remote"
 (defn transmit!
   [{:keys [parser]
-    :as   env} {::ftx/keys [id idx ast options update-handler
-                            result-handler active?]}]
+    :as   env} {::ftx/keys [id idx options update-handler active?
+                            result-handler ast]}]
   (let [query (eql/ast->query ast)
         result (parser env query)]
     (log/info :query query)
