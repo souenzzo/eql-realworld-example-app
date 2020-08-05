@@ -14,7 +14,10 @@
     [com.wsscode.pathom.core :as p]
     [edn-query-language.core :as eql]
     [goog.object :as gobj]
-    [taoensso.timbre :as log]))
+    [goog.events :as events]
+    [goog.history.EventType :as et]
+    [taoensso.timbre :as log])
+  (:import (goog.history Html5History)))
 ;; TODO: Create a lib for "pathom remote"
 (defn transmit!
   [{:keys [parser]
@@ -128,12 +131,9 @@
         (dom/i
           {:className "ion-heart"})
         favorites-count))
-    (dom/button
-      {:onClick #(dr/change-route! this ["article" slug])}
-      slug)
     (dom/a
       {:className "preview-link"
-       :href      ""}
+       :href      (str "#/article/" slug)}
       (dom/h1 title)
       (dom/p description)
       (dom/span "Read more...")
@@ -592,16 +592,10 @@
               {:key       label
                :className "nav-item"}
               (dom/a
-                {:onClick #(dr/change-route! this path)
-                 :classes ["nav-link"
-                           (when (= current-route path)
-                             "active")]}
-                label)
-              ;;TODO: Back to href
-              #_(dom/a
-                  {:href      href
-                   :className "nav-link active"}
-                  label))))))))
+                {:href    (str "#/" (string/join "/" path))
+                 :classes ["nav-link" (when (= current-route path)
+                                        "active")]}
+                label))))))))
 
 (def ui-header (comp/factory Header))
 
@@ -639,7 +633,13 @@
 (defn client-did-mount
   "Must be used as :client-did-mount parameter of app creation, or called just after you mount the app."
   [app]
-  (dr/change-route! app ["feed"]))
+  (let [{::keys [history]} (comp/shared app)]
+    (doto history
+      (events/listen et/NAVIGATE (fn [e]
+                                   (let [token (gobj/get e "token")
+                                         path (vec (rest (string/split token #"/")))]
+                                     (dr/change-route! app path))))
+      (.setEnabled true))))
 
 (defn fetch
   [{::keys [api-url]} {::keys [path method body]}]
@@ -789,7 +789,8 @@
 
 (def parser
   (p/parallel-parser
-    {::p/plugins [(pc/connect-plugin {::pc/register register})
+    {::p/plugins [(pc/connect-plugin {::pc/register (concat register
+                                                            [pc/index-explorer-resolver])})
                   p/elide-special-outputs-plugin]
      ::p/mutate  pc/mutate-async}))
 
@@ -805,6 +806,7 @@
    ::p/placeholder-prefixes #{">"}})
 
 (defonce app (app/fulcro-app {:client-did-mount client-did-mount
+                              :shared           {::history (Html5History.)}
                               :remotes          {:remote remote}}))
 
 (def node "conduit")
