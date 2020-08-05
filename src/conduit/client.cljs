@@ -312,9 +312,11 @@
 
 (defsc Redirect [this {:conduit.redirect/keys [path]}]
   {:query [:conduit.redirect/path]}
-  (dom/button
-    {:onClick #(dr/change-route! this path)}
-    (pr-str path)))
+  (let [href (str "#/" (string/join "/" path))
+        {::keys [^Html5History history]}  (comp/shared this)]
+    (dom/a
+      {:href #(.setToken history href)}
+      href)))
 
 (def ui-redirect (comp/factory Redirect))
 
@@ -635,8 +637,8 @@
   [app]
   (let [{::keys [history]} (comp/shared app)]
     (doto history
-      (events/listen et/NAVIGATE (fn [e]
-                                   (let [token (gobj/get e "token")
+      (events/listen et/NAVIGATE (fn [^goog.history.Event e]
+                                   (let [token (.token e)
                                          path (vec (rest (string/split token #"/")))]
                                      (dr/change-route! app path))))
       (.setEnabled true))))
