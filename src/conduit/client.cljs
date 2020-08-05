@@ -31,12 +31,24 @@
                        :original-transaction ast
                        :status-code          200}))))
 
+
+(defn path->href
+  [app path & {:as kvs}]
+  (str "#/" (string/join "/" path)
+       (when-not (empty? kvs)
+         (str "?" (string/join ""
+                               (map (fn [[k v]]
+                                      (str (js/encodeURIComponent (name k))
+                                           "=" (js/encodeURIComponent v)))
+                                    kvs))))))
+
+
 (defsc TagPill [this {:conduit.tag/keys [tag]}]
   {:query [:conduit.tag/tag]
    :ident :conduit.tag/tag}
   (dom/li
     {:className "tag-default tag-pill tag-outline"
-     :href      ""}
+     :href      (path->href this ["feed"] :tab (str "#" tag))}
     tag))
 
 (def ui-tag-pill (comp/factory TagPill {:keyfn :conduit.tag/tag}))
@@ -46,7 +58,7 @@
    :ident :conduit.tag/tag}
   (dom/a
     {:className "tag-pill tag-default"
-     :href      ""}
+     :href      (path->href this ["feed"] :tab (str "#" tag))}
     tag))
 
 (def ui-tag-link (comp/factory TagLink {:keyfn :conduit.tag/tag}))
@@ -84,9 +96,9 @@
     (dom/ul
       {:className "nav nav-pills outline-active"}
       (for [{::keys [label href]} [{::label "Your Feed"
-                                    ::href  ""}
+                                    ::href  (path->href this ["feed"] :tab "my")}
                                    {::label "Global Feed"
-                                    ::href  ""}]]
+                                    ::href  (path->href this ["feed"] :tab "global")}]]
 
         (dom/li
           {:key       label
@@ -114,14 +126,14 @@
     (dom/div
       {:className "article-meta"}
       (dom/a
-        {:href "profile.html"})
+        {:href (path->href this ["profile" username])})
       (dom/img
         {:src image})
       (dom/div
         {:className "info"}
         (dom/a
           {:className "author"
-           :href      ""}
+           :href      (path->href this ["profile" username])}
           username)
         (dom/span
           {:className "date"}
@@ -133,7 +145,7 @@
         favorites-count))
     (dom/a
       {:className "preview-link"
-       :href      (str "#/article/" slug)}
+       :href      (path->href this ["article" slug])}
       (dom/h1 title)
       (dom/p description)
       (dom/span "Read more...")
@@ -194,7 +206,7 @@
           (dom/p
             {:className "text-xs-center"}
             (dom/a
-              {:href ""}
+              {:href (path->href this ["login"])}
               "Have an account?"))
           (dom/ul
             {:className "error-messages"}
@@ -222,8 +234,10 @@
               {:className "btn btn-lg btn-primary pull-xs-right"}
               "Sign up")))))))
 
-(defsc Article [this {:conduit.article/keys [slug body]}]
+(defsc Article [this {:conduit.profile/keys [username]
+                      :conduit.article/keys [slug body]}]
   {:query         [:conduit.article/slug
+                   :conduit.profile/username
                    :conduit.article/body]
    :ident         :conduit.article/slug
    :route-segment ["article" :conduit.article/slug]
@@ -241,8 +255,10 @@
         (dom/h1 "How to build webapps that scale")
         (dom/div
           :.article-meta
-          (dom/a {:href ""} (dom/img {:src "http://i.imgur.com/Qr71crq.jpg"}))
-          (dom/div :.info (dom/a :.author {:href ""} "Eric Simons") (dom/span :.date "January 20th"))
+          (dom/a {:href (path->href this ["profile" username])}
+                 (dom/img {:src "http://i.imgur.com/Qr71crq.jpg"}))
+          (dom/div :.info (dom/a :.author {:href (path->href this ["profile" username])}
+                                 "Eric Simons") (dom/span :.date "January 20th"))
           (dom/button
             :.btn.btn-sm.btn-outline-secondary
             (dom/i :.ion-plus-round)
@@ -261,8 +277,10 @@
         :.article-actions
         (dom/div
           :.article-meta
-          (dom/a {:href "profile.html"} (dom/img {:src "http://i.imgur.com/Qr71crq.jpg"}))
-          (dom/div :.info (dom/a :.author {:href ""} "Eric Simons") (dom/span :.date "January 20th"))
+          (dom/a {:href (path->href this ["profile" username])}
+                 (dom/img {:src "http://i.imgur.com/Qr71crq.jpg"}))
+          (dom/div :.info (dom/a :.author {:href (path->href this ["profile" username])}
+                                 "Eric Simons") (dom/span :.date "January 20th"))
           (dom/button
             :.btn.btn-sm.btn-outline-secondary
             (dom/i :.ion-plus-round)
@@ -313,7 +331,7 @@
 (defsc Redirect [this {:conduit.redirect/keys [path]}]
   {:query [:conduit.redirect/path]}
   (let [href (str "#/" (string/join "/" path))
-        {::keys [^Html5History history]}  (comp/shared this)]
+        {::keys [^Html5History history]} (comp/shared this)]
     (dom/a
       {:href #(.setToken history href)}
       href)))
@@ -348,7 +366,7 @@
           (dom/p
             {:className "text-xs-center"}
             (dom/a
-              {:href ""}
+              {:href (path->href this ["register"])}
               "Need an account?"))
           (dom/ul
             {:className "error-messages"}
@@ -585,7 +603,7 @@
       (dom/div
         {:className "container"}
         (dom/a {:className "navbar-brand"
-                :href      "index.html"}
+                :href      (path->href this ["feed"])}
                "conduit")
         (dom/ul
           {:className "nav navbar-nav pull-xs-right"}
@@ -594,7 +612,7 @@
               {:key       label
                :className "nav-item"}
               (dom/a
-                {:href    (str "#/" (string/join "/" path))
+                {:href    (path->href this path)
                  :classes ["nav-link" (when (= current-route path)
                                         "active")]}
                 label))))))))
@@ -607,7 +625,7 @@
     (dom/div
       {:className "container"}
       (dom/a {:className "logo-font"
-              :href      "/"}
+              :href      (path->href this ["feed"])}
              "conduit")
       (dom/span
         {:className "attribution"}
@@ -638,8 +656,9 @@
   (let [{::keys [history]} (comp/shared app)]
     (doto history
       (events/listen et/NAVIGATE (fn [^goog.history.Event e]
-                                   (let [token (.token e)
-                                         path (vec (rest (string/split token #"/")))]
+                                   (let [token (.-token e)
+                                         path (vec (rest (string/split (first (string/split token #"\?"))
+                                                                       #"/")))]
                                      (dr/change-route! app path))))
       (.setEnabled true))))
 
