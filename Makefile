@@ -13,9 +13,5 @@ node_modules:
 	npm install
 
 deploy: clean target/main.js
-	git checkout gh-pages
-	cp target/main.js .
-	git add main.js
-	git commit -am'+main.js'
-	git push origin gh-pages
-	git checkout master
+	cp target/main.js gh-pages/main.js
+	cd gh-pages && git add main.js && git commit -am'+main.js' && git push origin gh-pages
