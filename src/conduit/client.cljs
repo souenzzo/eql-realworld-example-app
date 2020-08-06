@@ -14,6 +14,8 @@
     [com.wsscode.pathom.core :as p]
     [edn-query-language.core :as eql]
     [goog.object :as gobj]
+    [com.fulcrologic.rad.report :as report]
+    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
     [goog.events :as events]
     [goog.history.EventType :as et]
     [taoensso.timbre :as log])
@@ -53,13 +55,17 @@
 
 (def ui-tag-pill (comp/factory TagPill {:keyfn :conduit.tag/tag}))
 
-(defsc TagLink [this {:conduit.tag/keys [tag]}]
-  {:query [:conduit.tag/tag]
-   :ident :conduit.tag/tag}
+(defattr tag-tag :conduit.tag/tag :string
+  {::attr/identity? true})
+
+(report/defsc-report TagLink [this props]
+  {::report/source-attribute ::popular-tags
+   ::report/row-pk           tag-tag
+   ::report/columns          [tag-tag]}
   (dom/a
     {:className "tag-pill tag-default"
-     :href      (path->href this ["feed"] :tab (str "#" tag))}
-    tag))
+     :href      (path->href this ["feed"] :tab (str "#" (:conduit.tag/tag props)))}
+    (:conduit.tag/tag props)))
 
 (def ui-tag-link (comp/factory TagLink {:keyfn :conduit.tag/tag}))
 

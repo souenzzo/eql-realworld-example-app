@@ -1,8 +1,9 @@
 {:deps     true
  :dev-http {8000 ["classpath:public" "target"]}
- :builds   {:conduit {:target     :browser
-                      :output-dir "target"
-                      :asset-path "/"
-                      :modules    {:main {:init-fn conduit.client/init-fn}}
-                      :devtools   {:preloads   [conduit.dev]
-                                   :after-load conduit.dev/after-load}}}}
+ :builds   {:conduit {:target           :browser
+                      :output-dir       "target"
+                      :asset-path       "/"
+                      :modules          {:main {:init-fn conduit.client/init-fn}}
+                      :compiler-options {:source-map true}
+                      :devtools         {:preloads   [conduit.dev]
+                                         :after-load conduit.dev/after-load}}}}
