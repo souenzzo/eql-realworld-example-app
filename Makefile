@@ -18,3 +18,4 @@ deploy: clean target/main.js
 	git add main.js
 	git commit -am'+main.js'
 	git push origin gh-pages
+	git checkout master
