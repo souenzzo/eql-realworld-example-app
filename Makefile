@@ -14,4 +14,5 @@ node_modules:
 
 deploy: clean target/main.js
 	cp target/main.js gh-pages/main.js
+	cp target/main.js.map gh-pages/main.js.map
 	cd gh-pages && git add main.js && git commit -am'+main.js' && git push origin gh-pages
