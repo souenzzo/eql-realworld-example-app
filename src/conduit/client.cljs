@@ -82,6 +82,8 @@
       {:className "tag-list"}
       (map ui-tag-link (::popular-tags props)))))
 
+(def sa-popular-tags (comp/component-options PopularTags ::report/source-attribute))
+
 (def ui-popular-tags (comp/factory PopularTags))
 
 (defn ui-banner
@@ -162,37 +164,38 @@
 (def ui-article-preview (comp/factory ArticlePreview {:keyfn :conduit.article/slug}))
 
 (defsc Feed [this {::keys  [articles]
-                   :>/keys [popular-tags feed-toggle]
+                   :>/keys [feed-toggle]
                    :as     props}]
   {:ident         (fn [] [:component/id ::feed])
    :query         [:component/id
                    {::articles (comp/get-query ArticlePreview)}
-                   {:>/popular-tags (comp/get-query PopularTags)}
+                   {sa-popular-tags (comp/get-query PopularTags)}
                    {:>/feed-toggle (comp/get-query FeedToggle)}]
    :initial-state (fn [_]
-                    {:component/id   ::feed
-                     :>/popular-tags (comp/get-initial-state PopularTags _)
-                     :>/feed-toggle  (comp/get-initial-state FeedToggle _)})
+                    {:component/id      ::feed
+                     sa-popular-tags (comp/get-initial-state PopularTags _)
+                     :>/feed-toggle     (comp/get-initial-state FeedToggle _)})
    :will-enter    (fn [app _]
                     (dr/route-deferred [:component/id ::feed]
                                        #(df/load! app [:component/id ::feed] Feed
                                                   {:post-mutation        `dr/target-ready
                                                    :post-mutation-params {:target [:component/id ::feed]}})))
    :route-segment ["feed"]}
-  (dom/div
-    {:className "home-page"}
-    (ui-banner)
+  (let [popular-tags (get props sa-popular-tags)]
     (dom/div
-      {:className "container page"}
+      {:className "home-page"}
+      (ui-banner)
       (dom/div
-        {:className "row"}
+        {:className "container page"}
         (dom/div
-          {:className "col-md-9"}
-          (ui-feed-toggle feed-toggle)
-          (map ui-article-preview articles))
-        (dom/div
-          {:className "col-md-3"}
-          (ui-popular-tags popular-tags))))))
+          {:className "row"}
+          (dom/div
+            {:className "col-md-9"}
+            (ui-feed-toggle feed-toggle)
+            (map ui-article-preview articles))
+          (dom/div
+            {:className "col-md-3"}
+            (ui-popular-tags popular-tags)))))))
 
 (defsc SignUp [this props]
   {:ident         (fn [] [:component/id ::sign-up])
