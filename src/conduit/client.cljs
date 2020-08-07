@@ -12,8 +12,10 @@
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
     [com.wsscode.pathom.connect :as pc]
     [com.wsscode.pathom.core :as p]
+    [com.fulcrologic.rad.report-options :as ro]
     [edn-query-language.core :as eql]
     [goog.object :as gobj]
+    [conduit.model.tag :as m.tag]
     [com.fulcrologic.rad.report :as report]
     [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
     [goog.events :as events]
@@ -55,32 +57,30 @@
 
 (def ui-tag-pill (comp/factory TagPill {:keyfn :conduit.tag/tag}))
 
-(defattr tag-tag :conduit.tag/tag :string
-  {::attr/identity? true})
-
-(report/defsc-report TagLink [this props]
-  {::report/source-attribute ::popular-tags
-   ::report/row-pk           tag-tag
-   ::report/columns          [tag-tag]}
+(defsc TagLink [this {:conduit.tag/keys [tag]}]
+  {:query [:conduit.tag/tag]
+   :ident :conduit.tag/tag}
   (dom/a
     {:className "tag-pill tag-default"
-     :href      (path->href this ["feed"] :tab (str "#" (:conduit.tag/tag props)))}
-    (:conduit.tag/tag props)))
+     :href      (path->href this ["feed"] :tab (str "#" tag))}
+    tag))
+
 
 (def ui-tag-link (comp/factory TagLink {:keyfn :conduit.tag/tag}))
 
-(defsc PopularTags [this {::keys [popular-tags]}]
-  {:ident         (fn [] [:component/id ::popular-tags])
-   :query         [:component/id
-                   ::popular-tags]
-   :initial-state (fn [_]
-                    {:component/id ::popular-tags})}
+(report/defsc-report PopularTags [this props]
+  {ro/source-attribute ::popular-tags
+   ro/row-pk           m.tag/tag
+   ro/columns          [m.tag/tag]
+   ro/run-on-mount?    true}
   (dom/div
     {:className "sidebar"}
     (dom/p "Popular Tags")
+    ;; debug
+    (dom/pre (pr-str props))
     (dom/div
       {:className "tag-list"}
-      (map ui-tag-link popular-tags))))
+      (map ui-tag-link (::popular-tags props)))))
 
 (def ui-popular-tags (comp/factory PopularTags))
 
