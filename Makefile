@@ -20,4 +20,4 @@ deploy: clean target/conduit/main.js
 	cp target/workspace/main.js gh-pages/workspace.js
 	cp target/conduit/main.js.map gh-pages/conduit.js.map
 	cp target/workspace/main.js.map gh-pages/workspace.js.map
-	cd gh-pages && git add main.js && git commit -am'+main.js' && git push origin gh-pages
+	cd gh-pages && git commit -am'+main.js' && git push origin gh-pages
