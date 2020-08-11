@@ -10,4 +10,9 @@
     {::ctf3/root          conduit/TagLink
      ::ctf3/initial-state {:conduit.tag/tag "Hello"}}))
 
+(ws/defcard popular-tags
+  (ctf3/fulcro-card
+    {::ctf3/root          conduit/PopularTags
+     ::ctf3/initial-state {::conduit/popular-tags [{:conduit.tag/tag "Hello"}]}}))
+
 (defonce init (ws/mount))

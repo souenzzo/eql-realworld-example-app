@@ -16,8 +16,6 @@
     [edn-query-language.core :as eql]
     [goog.object :as gobj]
     [conduit.model.tag :as m.tag]
-    [com.fulcrologic.rad.report :as report]
-    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
     [goog.events :as events]
     [goog.history.EventType :as et]
     [taoensso.timbre :as log])
@@ -68,21 +66,14 @@
 
 (def ui-tag-link (comp/factory TagLink {:keyfn :conduit.tag/tag}))
 
-(report/defsc-report PopularTags [this props]
-  {ro/source-attribute ::popular-tags
-   ro/row-pk           m.tag/tag
-   ro/columns          [m.tag/tag]
-   ro/run-on-mount?    true}
+(defsc PopularTags [this {::keys [popular-tags]}]
+  {:query [{::popular-tags (comp/get-query TagLink)}]}
   (dom/div
     {:className "sidebar"}
     (dom/p "Popular Tags")
-    ;; debug
-    (dom/pre (pr-str props))
     (dom/div
       {:className "tag-list"}
-      (map ui-tag-link (::popular-tags props)))))
-
-(def sa-popular-tags (comp/component-options PopularTags ::report/source-attribute))
+      (map ui-tag-link popular-tags))))
 
 (def ui-popular-tags (comp/factory PopularTags))
 
@@ -97,23 +88,31 @@
         "conduit")
       (dom/p "A place to share your knowledge."))))
 
-(defsc FeedToggle [this props]
-  {:query []}
+(defsc FeedButton [this {::keys [label href]}]
+  {:query [::label ::href]}
+  (dom/li
+    {:className "nav-item"}
+    (dom/a {:className "nav-link disabled"
+            :href      href}
+           label)))
+
+(def ui-feed-button (comp/factory FeedButton {:keyfn ::label}))
+
+
+
+(defsc FeedToggle [this {::keys [feed-toggle]}]
+  {:query [{::feed-toggle (comp/get-query FeedButton)}]}
   (dom/div
     {:className "feed-toggle"}
     (dom/ul
       {:className "nav nav-pills outline-active"}
-      (for [{::keys [label href]} [{::label "Your Feed"
-                                    ::href  (path->href this ["feed"] :tab "my")}
-                                   {::label "Global Feed"
-                                    ::href  (path->href this ["feed"] :tab "global")}]]
+      (map ui-feed-button
+           feed-toggle
+           #_[{::label "Your Feed"
+               ::href  (path->href this ["feed"] :tab "my")}
+              {::label "Global Feed"
+               ::href  (path->href this ["feed"] :tab "global")}]))))
 
-        (dom/li
-          {:key       label
-           :className "nav-item"}
-          (dom/a {:className "nav-link disabled"
-                  :href      href}
-                 label))))))
 
 (def ui-feed-toggle (comp/factory FeedToggle))
 
@@ -164,84 +163,38 @@
 (def ui-article-preview (comp/factory ArticlePreview {:keyfn :conduit.article/slug}))
 
 (defsc Feed [this {::keys  [articles]
-                   :>/keys [feed-toggle]
+                   :>/keys [feed-toggle popular-tags]
                    :as     props}]
   {:ident         (fn [] [:component/id ::feed])
    :query         [:component/id
                    {::articles (comp/get-query ArticlePreview)}
-                   {sa-popular-tags (comp/get-query PopularTags)}
+                   {:>/popular-tags (comp/get-query PopularTags)}
                    {:>/feed-toggle (comp/get-query FeedToggle)}]
    :initial-state (fn [_]
-                    {:component/id      ::feed
-                     sa-popular-tags (comp/get-initial-state PopularTags _)
-                     :>/feed-toggle     (comp/get-initial-state FeedToggle _)})
+                    {:component/id   ::feed
+                     :>/popular-tags (comp/get-initial-state PopularTags _)
+                     :>/feed-toggle  (comp/get-initial-state FeedToggle _)})
    :will-enter    (fn [app _]
                     (dr/route-deferred [:component/id ::feed]
                                        #(df/load! app [:component/id ::feed] Feed
                                                   {:post-mutation        `dr/target-ready
                                                    :post-mutation-params {:target [:component/id ::feed]}})))
    :route-segment ["feed"]}
-  (let [popular-tags (get props sa-popular-tags)]
-    (dom/div
-      {:className "home-page"}
-      (ui-banner)
-      (dom/div
-        {:className "container page"}
-        (dom/div
-          {:className "row"}
-          (dom/div
-            {:className "col-md-9"}
-            (ui-feed-toggle feed-toggle)
-            (map ui-article-preview articles))
-          (dom/div
-            {:className "col-md-3"}
-            (ui-popular-tags popular-tags)))))))
-
-(defsc SignUp [this props]
-  {:ident         (fn [] [:component/id ::sign-up])
-   :query         []
-   :route-segment ["register"]}
   (dom/div
-    {:className "auth-page"}
+    {:className "home-page"}
+    (ui-banner)
     (dom/div
       {:className "container page"}
       (dom/div
         {:className "row"}
         (dom/div
-          {:className "col-md-6 offset-md-3 col-xs-12"}
-          (dom/h1
-            {:className "text-xs-center"}
-            "Sign up")
-          (dom/p
-            {:className "text-xs-center"}
-            (dom/a
-              {:href (path->href this ["login"])}
-              "Have an account?"))
-          (dom/ul
-            {:className "error-messages"}
-            (dom/li "That email is already taken"))
-          (dom/form
-            (dom/fieldset
-              {:className "form-group"}
-              (dom/input
-                {:className   "form-control form-control-lg"
-                 :type        "text",
-                 :placeholder "Your Name"}))
-            (dom/fieldset
-              {:className "form-group"}
-              (dom/input
-                {:className   "form-control form-control-lg"
-                 :type        "text"
-                 :placeholder "Email"}))
-            (dom/fieldset
-              {:className "form-group"}
-              (dom/input
-                {:className   "form-control form-control-lg"
-                 :type        "password",
-                 :placeholder "Password"}))
-            (dom/button
-              {:className "btn btn-lg btn-primary pull-xs-right"}
-              "Sign up")))))))
+          {:className "col-md-9"}
+          (ui-feed-toggle feed-toggle)
+          (map ui-article-preview articles))
+        (dom/div
+          {:className "col-md-3"}
+          (ui-popular-tags popular-tags))))))
+
 
 (defsc Article [this {:conduit.profile/keys [username]
                       :conduit.article/keys [slug body]}]
@@ -371,7 +324,7 @@
           {:className "col-md-6 offset-md-3 col-xs-12"}
           (dom/h1
             {:className "text-xs-center"}
-            "Sign In")
+            "Sign in")
           (dom/p
             {:className "text-xs-center"}
             (dom/a
@@ -391,26 +344,90 @@
                            (comp/transact! this `[(conduit.profile/login ~{:conduit.profile/email    email
                                                                            :conduit.profile/password password})])))}
             (dom/fieldset
-              (dom/fieldset
-                {:className "form-group"}
-                (dom/input
-                  {:className   "form-control form-control-lg"
-                   :type        "text"
-                   :name        "email"
-                   :placeholder "Email"}))
-              (dom/fieldset
-                {:className "form-group"}
-                (dom/input
-                  {:className   "form-control form-control-lg"
-                   :type        "password",
-                   :name        "password"
-                   :placeholder "Password"}))
-              (dom/button
-                {:className "btn btn-lg btn-primary pull-xs-right"
-                 :disabled  loading?}
-                (if loading?
-                  "loadgin ..."
-                  "Sign in")))))))))
+              {:className "form-group"}
+              (dom/input
+                {:className   "form-control form-control-lg"
+                 :type        "text"
+                 :name        "email"
+                 :placeholder "Email"}))
+            (dom/fieldset
+              {:className "form-group"}
+              (dom/input
+                {:className   "form-control form-control-lg"
+                 :type        "password",
+                 :name        "password"
+                 :placeholder "Password"}))
+            (dom/button
+              {:className "btn btn-lg btn-primary pull-xs-right"
+               :disabled  loading?}
+              (if loading?
+                "loading ..."
+                "Sign in"))))))))
+
+(defsc SignUp [this {::keys [errors]}]
+  {:ident         (fn [] [:component/id ::sign-up])
+   :query         [:conduit.profile.login/loading?
+                   :conduit.profile/username
+                   :conduit.profile/email
+                   ::top-routes
+                   {::errors (comp/get-query ErrorMessage)}
+                   {:>/header (comp/get-query Header)}
+                   {:conduit.profile.login/redirect (comp/get-query Redirect)}]
+   :route-segment ["register"]}
+  (dom/div
+    {:className "auth-page"}
+    (dom/div
+      {:className "container page"}
+      (dom/div
+        {:className "row"}
+        (dom/div
+          {:className "col-md-6 offset-md-3 col-xs-12"}
+          (dom/h1
+            {:className "text-xs-center"}
+            "Sign up")
+          (dom/p
+            {:className "text-xs-center"}
+            (dom/a
+              {:href (path->href this ["login"])}
+              "Have an account?"))
+          (dom/ul
+            {:className "error-messages"}
+            (map ui-error-message errors))
+          (dom/form
+            {:onSubmit (fn [e]
+                         (.preventDefault e)
+                         (let [form (-> e .-target)
+                               email (-> form (gobj/get "email") .-value)
+                               username (-> form (gobj/get "username") .-value)
+                               password (-> form (gobj/get "password") .-value)]
+                           (comp/transact! this `[(conduit.profile/register ~{:conduit.profile/email    email
+                                                                              :conduit.profile/username username
+                                                                              :conduit.profile/password password})])))}
+            (dom/fieldset
+              {:className "form-group"}
+              (dom/input
+                {:className   "form-control form-control-lg"
+                 :type        "text",
+                 :name        "username",
+                 :placeholder "Your Name"}))
+            (dom/fieldset
+              {:className "form-group"}
+              (dom/input
+                {:className   "form-control form-control-lg"
+                 :type        "text"
+                 :name        "email",
+                 :placeholder "Email"}))
+            (dom/fieldset
+              {:className "form-group"}
+              (dom/input
+                {:className   "form-control form-control-lg"
+                 :type        "password",
+                 :name        "password",
+                 :placeholder "Password"}))
+            (dom/button
+              {:className "btn btn-lg btn-primary pull-xs-right"}
+              "Sign up")))))))
+
 
 (m/defmutation conduit.profile/login
   [{:conduit.profile/keys [email password]}]
@@ -602,10 +619,10 @@
    :initial-state (fn [_]
                     {::top-routes [{::label "Home"
                                     ::path  ["feed"]}
-                                   {::label "Sign Up"
-                                    ::path  ["register"]}
-                                   {::label "Sign In"
-                                    ::path  ["login"]}]})}
+                                   {::label "Sign in"
+                                    ::path  ["login"]}
+                                   {::label "Sign up"
+                                    ::path  ["register"]}]})}
   (let [current-route (dr/current-route this)]
     (dom/nav
       {:className "navbar navbar-light"}
@@ -684,7 +701,12 @@
           <p!))))
 
 (def register
-  [(pc/resolver `top-routes
+  [(pc/constantly-resolver
+     ::feed-toggle [{::label "Your Feed"
+                     ::href  (str "#/feed")}
+                    {::label "Global Feed"
+                     ::href  (str "#/feed")}])
+   (pc/resolver `top-routes
                 {::pc/output [::top-routes]}
                 (fn [{::keys [authed-user]} _]
                   (let [username (-> @authed-user (get "username"))]
@@ -699,9 +721,9 @@
                                       ::path  ["profile" username]}]
                                     [{::label "Home"
                                       ::path  ["feed"]}
-                                     {::label "Sign Up"
+                                     {::label "Sign up"
                                       ::path  ["register"]}
-                                     {::label "Sign In"
+                                     {::label "Sign in"
                                       ::path  ["login"]}])})))
    (pc/mutation `conduit.profile/login
                 {::pc/params [:conduit.profile/password
