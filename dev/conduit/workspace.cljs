@@ -39,4 +39,6 @@
   (ctf3/fulcro-card
     {::ctf3/root conduit/Article}))
 
-(defonce init (ws/mount))
+(defn init-fn
+  []
+  (ws/mount))
