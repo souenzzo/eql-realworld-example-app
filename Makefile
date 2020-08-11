@@ -10,11 +10,14 @@ dev:
 
 target/conduit/main.js: node_modules
 	clojure -A:shadow-cljs release conduit
+	clojure -A:dev:shadow-cljs release workspace
 
 node_modules:
 	npm install
 
 deploy: clean target/conduit/main.js
-	cp target/conduit/main.js gh-pages/main.js
-	cp target/conduit/main.js.map gh-pages/main.js.map
+	cp target/conduit/main.js gh-pages/conduit.js
+	cp target/workspace/main.js gh-pages/workspace.js
+	cp target/conduit/main.js.map gh-pages/conduit.js.map
+	cp target/workspace/main.js.map gh-pages/workspace.js.map
 	cd gh-pages && git add main.js && git commit -am'+main.js' && git push origin gh-pages
