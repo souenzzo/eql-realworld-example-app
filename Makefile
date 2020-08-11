@@ -1,10 +1,12 @@
 #!/usr/bin/env make
 
-.PHONY: deploy clean
+.PHONY: deploy clean dev
 
 clean:
 	rm -rf .cpcache/ .shadow-cljs/ target/
 
+dev:
+	clojure -A:dev:shadow-cljs watch conduit workspace
 
 target/main.js: node_modules
 	clojure -A:shadow-cljs release conduit
