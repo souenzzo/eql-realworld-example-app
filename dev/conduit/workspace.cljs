@@ -1,18 +1,42 @@
 (ns conduit.workspace
   (:require [nubank.workspaces.core :as ws]
-            [nubank.workspaces.core :as ws]
             [conduit.client :as conduit]
-            [nubank.workspaces.card-types.fulcro3 :as ctf3]
-            [com.fulcrologic.fulcro.components :refer [defsc]]))
+            [nubank.workspaces.card-types.fulcro3 :as ctf3]))
 
-(ws/defcard tag-link
+(ws/defcard header
   (ctf3/fulcro-card
-    {::ctf3/root          conduit/TagLink
-     ::ctf3/initial-state {:conduit.tag/tag "Hello"}}))
+    {::ctf3/root conduit/Header}))
 
-(ws/defcard popular-tags
+(ws/defcard footer
   (ctf3/fulcro-card
-    {::ctf3/root          conduit/PopularTags
-     ::ctf3/initial-state {::conduit/popular-tags [{:conduit.tag/tag "Hello"}]}}))
+    {::ctf3/root conduit/Footer}))
+
+(ws/defcard home
+  (ctf3/fulcro-card
+    {::ctf3/root conduit/Feed}))
+
+(ws/defcard login
+  (ctf3/fulcro-card
+    {::ctf3/root conduit/SignIn}))
+
+(ws/defcard register
+  (ctf3/fulcro-card
+    {::ctf3/root conduit/SignUp}))
+
+(ws/defcard profile
+  (ctf3/fulcro-card
+    {::ctf3/root conduit/Profile}))
+
+(ws/defcard settings
+  (ctf3/fulcro-card
+    {::ctf3/root conduit/Settings}))
+
+(ws/defcard create-edit-article
+  (ctf3/fulcro-card
+    {::ctf3/root conduit/NewPost}))
+
+(ws/defcard article
+  (ctf3/fulcro-card
+    {::ctf3/root conduit/Article}))
 
 (defonce init (ws/mount))

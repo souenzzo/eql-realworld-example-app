@@ -121,7 +121,7 @@
                                                     description tag-list favorites-count]}]
   {:query [:conduit.article/description
            :conduit.article/title
-           :conduit.article/tag-list
+           {:conduit.article/tag-list (comp/get-query TagPill)}
            :conduit.article/favorites-count
            :conduit.article/created-at
            :conduit.profile/image

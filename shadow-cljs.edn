@@ -10,7 +10,8 @@
             :workspace {:target           :browser
                         :output-dir       "target/workspace"
                         :asset-path       "/workspace"
-                        :modules          {:main {:entries [conduit.workspace]}}
+                        :modules          {:main {:init-fn nubank.workspaces.core/mount}}
                         :compiler-options {:source-map true}
-                        :devtools         {:preloads   [conduit.dev]
+                        :devtools         {:preloads   [conduit.dev
+                                                        conduit.workspace]
                                            :after-load nubank.workspaces.core/after-load}}}}
