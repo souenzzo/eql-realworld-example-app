@@ -17,8 +17,10 @@
     [com.wsscode.pathom.core :as p]
     [com.fulcrologic.rad.container :refer [defsc-container]]
     [com.fulcrologic.rad.container-options :as co]
-    [conduit.model.article :as m.article]
-    [conduit.model.tag :as m.tag]
+    [conduit.article :as article]
+    [conduit.tag :as tag]
+    [conduit.feed-button :as feed-button]
+    [conduit.profile :as profile]
     [edn-query-language.core :as eql]
     [goog.events :as events]
     [goog.history.EventType :as et]
@@ -28,7 +30,7 @@
 ;; TODO: Create a lib for "pathom remote"
 (defn transmit!
   [{:keys [parser]
-    :as   env} {::ftx/keys [id idx options update-handler active?
+    :as   env} {::ftx/keys [; id idx options update-handler active?
                             result-handler ast]}]
   (let [query (eql/ast->query ast)
         result (parser env query)]
@@ -41,7 +43,7 @@
 
 (defn path->href
   [app path & {:as kvs}]
-  (str "#/" (string/join "/" path)
+  (str "#/" (string/join "/" (map js/encodeURIComponent path))
        (when-not (empty? kvs)
          (str "?" (string/join ""
                                (map (fn [[k v]]
@@ -60,28 +62,6 @@
 
 (def ui-tag-pill (comp/factory TagPill {:keyfn :conduit.tag/tag}))
 
-(defsc TagLink [this {:conduit.tag/keys [tag]}]
-  {:query [:conduit.tag/tag]
-   :ident :conduit.tag/tag}
-  (dom/a
-    {:className "tag-pill tag-default"
-     :href      (path->href this ["feed"] :tab (str "#" tag))}
-    tag))
-
-
-(def ui-tag-link (comp/factory TagLink {:keyfn :conduit.tag/tag}))
-
-(defsc PopularTags [this {::keys [popular-tags]}]
-  {:query [{::popular-tags (comp/get-query TagLink)}]}
-  (dom/div
-    {:className "sidebar"}
-    (dom/p "Popular Tags")
-    (dom/div
-      {:className "tag-list"}
-      (map ui-tag-link popular-tags))))
-
-(def ui-popular-tags (comp/factory PopularTags))
-
 (defn ui-banner
   []
   (dom/div
@@ -93,30 +73,24 @@
         "conduit")
       (dom/p "A place to share your knowledge."))))
 
-(defsc FeedButton [this {::keys [label href]}]
-  {:query [::label ::href]}
-  (dom/li
-    {:className "nav-item"}
-    (dom/a {:className "nav-link disabled"
-            :href      href}
-           label)))
-
-(def ui-feed-button (comp/factory FeedButton {:keyfn ::label}))
-
-
-
-(defsc FeedToggle [this {::keys [feed-toggle]}]
-  {:query [{::feed-toggle (comp/get-query FeedButton)}]}
-  (dom/div
-    {:className "feed-toggle"}
-    (dom/ul
-      {:className "nav nav-pills outline-active"}
-      (map ui-feed-button
-           feed-toggle
-           #_[{::label "Your Feed"
-               ::href  (path->href this ["feed"] :tab "my")}
-              {::label "Global Feed"
-               ::href  (path->href this ["feed"] :tab "global")}]))))
+(report/defsc-report FeedToggle [this props]
+  {ro/source-attribute ::feed-toggle
+   ro/run-on-mount?    true
+   ro/row-pk           feed-button/label
+   ro/columns          [feed-button/label
+                        feed-button/href]}
+  (let [{:ui/keys [current-rows]} props]
+    (dom/div
+      {:className "feed-toggle"}
+      (dom/ul
+        {:className "nav nav-pills outline-active"}
+        (for [{::feed-button/keys [label href]} current-rows]
+          (dom/li
+            {:className "nav-item"
+             :key       label}
+            (dom/a {:className "nav-link disabled"
+                    :href      href}
+                   label)))))))
 
 
 (def ui-feed-toggle (comp/factory FeedToggle))
@@ -126,12 +100,13 @@
                                                     description tag-list favorites-count]}]
   {:query [:conduit.article/description
            :conduit.article/title
-           {:conduit.article/tag-list (comp/get-query TagPill)}
            :conduit.article/favorites-count
            :conduit.article/created-at
+           :conduit.article/slug
+           ;; TODO: How to do it in RAD?
+           {:conduit.article/tag-list (comp/get-query TagPill)}
            :conduit.profile/image
-           :conduit.profile/username
-           :conduit.article/slug]
+           :conduit.profile/username]
    :ident :conduit.article/slug}
   (dom/div
     {:className "article-preview"}
@@ -167,85 +142,97 @@
 
 (def ui-article-preview (comp/factory ArticlePreview {:keyfn :conduit.article/slug}))
 
-(report/defsc-report ArticleFeedReport [this props]
+(report/defsc-report ArticleFeed [this props]
   {ro/source-attribute ::articles
    ro/run-on-mount?    true
-   ro/row-pk           m.article/slug
-   ro/columns          [m.article/slug
-                        m.article/title]}
+   ro/row-pk           article/slug
+   ro/columns          [article/description
+                        article/title
+                        article/favorites-count
+                        article/created-at
+                        article/slug
+                        profile/image
+                        profile/username]}
   (let [{:ui/keys [current-rows]} props]
-    (map ui-article-preview current-rows)))
+    (for [{:conduit.profile/keys [image username]
+           :conduit.article/keys [title created-at slug
+                                  description tag-list favorites-count]} current-rows]
+      (dom/div
+        {:key       slug
+         :className "article-preview"}
+        (dom/div
+          {:className "article-meta"}
+          (dom/a
+            {:href (path->href this ["profile" username])})
+          (dom/img
+            {:src image})
+          (dom/div
+            {:className "info"}
+            (dom/a
+              {:className "author"
+               :href      (path->href this ["profile" username])}
+              username)
+            (dom/span
+              {:className "date"}
+              created-at))
+          (dom/button
+            {:className "btn btn-outline-primary btn-sm pull-xs-right"}
+            (dom/i
+              {:className "ion-heart"})
+            favorites-count))
+        (dom/a
+          {:className "preview-link"
+           :href      (path->href this ["article" slug])}
+          (dom/h1 title)
+          (dom/p description)
+          (dom/span "Read more...")
+          (dom/ul
+            {:className "tag-list"}
+            (map ui-tag-pill tag-list)))))))
 
-(report/defsc-report PopularTagsReport [this props]
+(def ui-article-feed (comp/factory ArticleFeed))
+
+(report/defsc-report PopularTags [this props]
   {ro/source-attribute ::popular-tags
    ro/run-on-mount?    true
-   ro/row-pk           m.tag/tag
-   ro/columns          [m.tag/tag]}
+   ro/row-pk           tag/tag
+   ro/columns          [tag/tag]}
   (let [{:ui/keys [current-rows]} props]
     (dom/div
       {:className "sidebar"}
       (dom/p "Popular Tags")
       (dom/div
         {:className "tag-list"}
-        (map ui-tag-link current-rows)))))
+        (for [{::tag/keys [tag]} current-rows]
+          (dom/a
+            {:className "tag-pill tag-default"
+             :href      (path->href this ["feed"] :tab (str "#" tag))}
+            tag))))))
 
-(def ui-article-feed-report (comp/factory ArticleFeedReport))
-(def ui-popular-tags-report (comp/factory PopularTagsReport))
+(def ui-popular-tags (comp/factory PopularTags))
 
-(defsc-container FeedRAD [this props]
-  {co/children {:article-feed ArticleFeedReport
-                :popular-tags PopularTagsReport}
-   co/route    "feed-rad"}
-  (dom/div
-    {:className "home-page"}
-    (ui-banner)
+(defsc-container Feed [this props]
+  {co/children {:article-feed ArticleFeed
+                :feed-toggle  FeedToggle
+                :popular-tags PopularTags}
+   co/route    "feed"}
+  (let [{:keys [article-feed
+                feed-toggle
+                popular-tags]} props]
     (dom/div
-      {:className "container page"}
+      {:className "home-page"}
+      (ui-banner)
       (dom/div
-        {:className "row"}
+        {:className "container page"}
         (dom/div
-          {:className "col-md-9"}
-          #_(ui-feed-toggle feed-toggle)
-          (ui-article-feed-report (get props :article-feed)))
-        (dom/div
-          {:className "col-md-3"}
-          (ui-popular-tags-report (get props :popular-tags)))))))
-
-
-
-(defsc Feed [this {::keys  [articles]
-                   :>/keys [feed-toggle popular-tags]
-                   :as     props}]
-  {:ident         (fn [] [:component/id ::feed])
-   :query         [:component/id
-                   {::articles (comp/get-query ArticlePreview)}
-                   {:>/popular-tags (comp/get-query PopularTags)}
-                   {:>/feed-toggle (comp/get-query FeedToggle)}]
-   :initial-state (fn [_]
-                    {:component/id   ::feed
-                     :>/popular-tags (comp/get-initial-state PopularTags _)
-                     :>/feed-toggle  (comp/get-initial-state FeedToggle _)})
-   :will-enter    (fn [app _]
-                    (dr/route-deferred [:component/id ::feed]
-                                       #(df/load! app [:component/id ::feed] Feed
-                                                  {:post-mutation        `dr/target-ready
-                                                   :post-mutation-params {:target [:component/id ::feed]}})))
-   :route-segment ["feed"]}
-  (dom/div
-    {:className "home-page"}
-    (ui-banner)
-    (dom/div
-      {:className "container page"}
-      (dom/div
-        {:className "row"}
-        (dom/div
-          {:className "col-md-9"}
-          (ui-feed-toggle feed-toggle)
-          (map ui-article-preview articles))
-        (dom/div
-          {:className "col-md-3"}
-          (ui-popular-tags popular-tags))))))
-
+          {:className "row"}
+          (dom/div
+            {:className "col-md-9"}
+            (ui-feed-toggle feed-toggle)
+            (ui-article-feed article-feed))
+          (dom/div
+            {:className "col-md-3"}
+            (ui-popular-tags popular-tags)))))))
 
 (defsc Article [this {:conduit.profile/keys [username]
                       :conduit.article/keys [slug body]}]
@@ -654,7 +641,7 @@
         (map ui-article-preview articles)))))
 
 (defrouter TopRouter [this {:keys [current-state]}]
-  {:router-targets [Feed FeedRAD SignIn SignUp Article NewPost Settings Profile]}
+  {:router-targets [Feed SignIn SignUp Article NewPost Settings Profile]}
   (case current-state
     :pending (dom/div "Loading...")
     :failed (dom/div "Loading seems to have failed. Try another route.")
@@ -670,8 +657,6 @@
    :initial-state (fn [_]
                     {::top-routes [{::label "Home"
                                     ::path  ["feed"]}
-                                   {::label "Home (rad)"
-                                    ::path  ["feed-rad"]}
                                    {::label "Sign in"
                                     ::path  ["login"]}
                                    {::label "Sign up"
@@ -714,8 +699,7 @@
 
 (def ui-footer (comp/factory Footer))
 
-(defsc Root [this {:>/keys [footer header router]
-                   :as     props}]
+(defsc Root [this {:>/keys [footer header router]}]
   {:query         [{:>/header (comp/get-query Header)}
                    {:>/router (comp/get-query TopRouter)}
                    {:>/footer (comp/get-query Footer)}]
@@ -724,7 +708,6 @@
                      :>/router (comp/get-initial-state TopRouter _)
                      :>/footer (comp/get-initial-state Footer _)})}
   (comp/fragment
-    #_(debug props)
     (ui-header header)
     (ui-top-router router)
     (ui-footer footer)))
@@ -755,10 +738,10 @@
 
 (def register
   [(pc/constantly-resolver
-     ::feed-toggle [{::label "Your Feed"
-                     ::href  (str "#/feed")}
-                    {::label "Global Feed"
-                     ::href  (str "#/feed")}])
+     ::feed-toggle [{::feed-button/label "Your Feed"
+                     ::feed-button/href  (str "#/feed")}
+                    {::feed-button/label "Global Feed"
+                     ::feed-button/href  (str "#/feed")}])
    (pc/resolver `top-routes
                 {::pc/output [::top-routes]}
                 (fn [{::keys [authed-user]} _]
