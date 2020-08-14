@@ -16,6 +16,7 @@
     [com.wsscode.pathom.connect :as pc]
     [com.wsscode.pathom.core :as p]
     [conduit.model.article :as m.article]
+    [conduit.model.tag :as m.tag]
     [edn-query-language.core :as eql]
     [goog.events :as events]
     [goog.history.EventType :as et]
@@ -164,29 +165,59 @@
 
 (def ui-article-preview (comp/factory ArticlePreview {:keyfn :conduit.article/slug}))
 
-(report/defsc-report Feed [this props]
+(report/defsc-report ArticleFeedReport [this props]
   {ro/source-attribute ::articles
    ro/run-on-mount?    true
    ro/row-pk           m.article/slug
    ro/columns          [m.article/slug
-                        m.article/title]
-   ro/route            "feed"}
-  #_(let [{:ui/keys [current-rows]} props]
+                        m.article/title]}
+  (let [{:ui/keys [current-rows]} props]
+    (map ui-article-preview current-rows)))
+
+(report/defsc-report PopularTagsReport [this props]
+  {ro/source-attribute ::popular-tags
+   ro/run-on-mount?    true
+   ro/row-pk           m.tag/tag
+   ro/columns          [m.tag/tag]}
+  (let [{:ui/keys [current-rows]} props]
+    (dom/div
+      {:className "sidebar"}
+      (dom/p "Popular Tags")
       (dom/div
-        {:className "home-page"}
-        (ui-banner)
+        {:className "tag-list"}
+        (map ui-tag-link current-rows)))))
+
+(def ui-article-feed-report (comp/factory ArticleFeedReport))
+(def ui-popular-tags-report (comp/factory PopularTagsReport))
+
+(defsc FeedRAD [this props]
+  {:ident         (fn [] [:component/id ::feed-rad])
+   :query         [{:>/article-feed (comp/get-query ArticleFeedReport)}
+                   {:>/popular-tags (comp/get-query PopularTagsReport)}]
+   :initial-state (fn [_]
+                    {:>/article-feed (comp/get-initial-state ArticleFeedReport _)
+                     :>/popular-tags (comp/get-initial-state PopularTagsReport _)})
+   :route-segment ["feed-rad"]}
+  (let [{:>/keys [article-feed
+                  popular-tags]} props]
+    (dom/div
+      {:className "home-page"}
+      (ui-banner)
+      (dom/div
+        {:className "container page"}
         (dom/div
-          {:className "container page"}
+          {:className "row"}
           (dom/div
-            {:className "row"}
-            (dom/div
-              {:className "col-md-9"}
-              (map ui-article-preview current-rows)))))))
+            {:className "col-md-9"}
+            (ui-article-feed-report article-feed))
+          (dom/div
+            {:className "col-md-3"}
+            (ui-popular-tags-report popular-tags)))))))
 
 
-(defsc Feed* [this {::keys  [articles]
-                    :>/keys [feed-toggle popular-tags]
-                    :as     props}]
+(defsc Feed [this {::keys  [articles]
+                   :>/keys [feed-toggle popular-tags]
+                   :as     props}]
   {:ident         (fn [] [:component/id ::feed])
    :query         [:component/id
                    {::articles (comp/get-query ArticlePreview)}
@@ -625,7 +656,7 @@
         (map ui-article-preview articles)))))
 
 (defrouter TopRouter [this {:keys [current-state]}]
-  {:router-targets [Feed SignIn SignUp Article NewPost Settings Profile]}
+  {:router-targets [Feed FeedRAD SignIn SignUp Article NewPost Settings Profile]}
   (case current-state
     :pending (dom/div "Loading...")
     :failed (dom/div "Loading seems to have failed. Try another route.")
@@ -641,6 +672,8 @@
    :initial-state (fn [_]
                     {::top-routes [{::label "Home"
                                     ::path  ["feed"]}
+                                   {::label "Home (rad)"
+                                    ::path  ["feed-rad"]}
                                    {::label "Sign in"
                                     ::path  ["login"]}
                                    {::label "Sign up"
