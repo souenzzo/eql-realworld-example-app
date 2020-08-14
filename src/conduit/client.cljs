@@ -15,6 +15,8 @@
     [com.fulcrologic.rad.report-options :as ro]
     [com.wsscode.pathom.connect :as pc]
     [com.wsscode.pathom.core :as p]
+    [com.fulcrologic.rad.container :refer [defsc-container]]
+    [com.fulcrologic.rad.container-options :as co]
     [conduit.model.article :as m.article]
     [conduit.model.tag :as m.tag]
     [edn-query-language.core :as eql]
@@ -190,29 +192,25 @@
 (def ui-article-feed-report (comp/factory ArticleFeedReport))
 (def ui-popular-tags-report (comp/factory PopularTagsReport))
 
-(defsc FeedRAD [this props]
-  {:ident         (fn [] [:component/id ::feed-rad])
-   :query         [{:>/article-feed (comp/get-query ArticleFeedReport)}
-                   {:>/popular-tags (comp/get-query PopularTagsReport)}]
-   :initial-state (fn [_]
-                    {:>/article-feed (comp/get-initial-state ArticleFeedReport _)
-                     :>/popular-tags (comp/get-initial-state PopularTagsReport _)})
-   :route-segment ["feed-rad"]}
-  (let [{:>/keys [article-feed
-                  popular-tags]} props]
+(defsc-container FeedRAD [this props]
+  {co/children {:article-feed ArticleFeedReport
+                :popular-tags PopularTagsReport}
+   co/route    "feed-rad"}
+  (dom/div
+    {:className "home-page"}
+    (ui-banner)
     (dom/div
-      {:className "home-page"}
-      (ui-banner)
+      {:className "container page"}
       (dom/div
-        {:className "container page"}
+        {:className "row"}
         (dom/div
-          {:className "row"}
-          (dom/div
-            {:className "col-md-9"}
-            (ui-article-feed-report article-feed))
-          (dom/div
-            {:className "col-md-3"}
-            (ui-popular-tags-report popular-tags)))))))
+          {:className "col-md-9"}
+          #_(ui-feed-toggle feed-toggle)
+          (ui-article-feed-report (get props :article-feed)))
+        (dom/div
+          {:className "col-md-3"}
+          (ui-popular-tags-report (get props :popular-tags)))))))
+
 
 
 (defsc Feed [this {::keys  [articles]
