@@ -1,7 +1,7 @@
 (ns conduit.client
   (:require
-    [clojure.core.async.interop :refer-macros [<p!]]
     [clojure.core.async :as async]
+    [clojure.core.async.interop :refer-macros [<p!]]
     [clojure.string :as string]
     [com.fulcrologic.fulcro.algorithms.tx-processing :as ftx]
     [com.fulcrologic.fulcro.application :as app]
@@ -10,14 +10,16 @@
     [com.fulcrologic.fulcro.dom :as dom]
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
+    [com.fulcrologic.rad.application :as rad-app]
+    [com.fulcrologic.rad.report :as report]
+    [com.fulcrologic.rad.report-options :as ro]
     [com.wsscode.pathom.connect :as pc]
     [com.wsscode.pathom.core :as p]
-    [com.fulcrologic.rad.report-options :as ro]
+    [conduit.model.article :as m.article]
     [edn-query-language.core :as eql]
-    [goog.object :as gobj]
-    [conduit.model.tag :as m.tag]
     [goog.events :as events]
     [goog.history.EventType :as et]
+    [goog.object :as gobj]
     [taoensso.timbre :as log])
   (:import (goog.history Html5History)))
 ;; TODO: Create a lib for "pathom remote"
@@ -162,9 +164,29 @@
 
 (def ui-article-preview (comp/factory ArticlePreview {:keyfn :conduit.article/slug}))
 
-(defsc Feed [this {::keys  [articles]
-                   :>/keys [feed-toggle popular-tags]
-                   :as     props}]
+(report/defsc-report Feed [this props]
+  {ro/source-attribute ::articles
+   ro/run-on-mount?    true
+   ro/row-pk           m.article/slug
+   ro/columns          [m.article/slug
+                        m.article/title]
+   ro/route            "feed"}
+  #_(let [{:ui/keys [current-rows]} props]
+      (dom/div
+        {:className "home-page"}
+        (ui-banner)
+        (dom/div
+          {:className "container page"}
+          (dom/div
+            {:className "row"}
+            (dom/div
+              {:className "col-md-9"}
+              (map ui-article-preview current-rows)))))))
+
+
+(defsc Feed* [this {::keys  [articles]
+                    :>/keys [feed-toggle popular-tags]
+                    :as     props}]
   {:ident         (fn [] [:component/id ::feed])
    :query         [:component/id
                    {::articles (comp/get-query ArticlePreview)}
@@ -857,9 +879,9 @@
                              p/env-placeholder-reader]
    ::p/placeholder-prefixes #{">"}})
 
-(defonce app (app/fulcro-app {:client-did-mount client-did-mount
-                              :shared           {::history (Html5History.)}
-                              :remotes          {:remote remote}}))
+(defonce app (rad-app/fulcro-rad-app {:client-did-mount client-did-mount
+                                      :shared           {::history (Html5History.)}
+                                      :remotes          {:remote remote}}))
 
 (def node "conduit")
 
