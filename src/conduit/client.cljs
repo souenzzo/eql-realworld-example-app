@@ -179,7 +179,7 @@
                       ::article/keys [created-at comments body title favorites-count]}]
   {:query         [::article/body
                    ::profile/username
-                   ::article/comments
+                   {::article/comments (comp/get-query ui/Comment)}
                    ::profile/image
                    {:>/article-meta (comp/get-query ui/ArticleMeta)}
                    ::article/slug
@@ -208,7 +208,7 @@
         :.row.article-content
         (dom/div
           :.col-md-12
-          body))
+          (dom/pre body)))
       (dom/hr)
       (dom/div
         :.article-actions
@@ -528,31 +528,38 @@
           .json
           <p!))))
 
+(defn qualify-profile
+  [{:strs [bio
+           following
+           image
+           username]}]
+  (into {}
+        (remove (comp nil? val))
+        #:conduit.profile{:bio       bio
+                          :following following
+                          :image     image
+                          :username  username}))
+
 (defn qualify-article
   [{:strs [title slug body createdAt updatedAt tagList description author favorited favoritesCount]}]
-  (let [{:strs [bio
-                following
-                image
-                username]} author
-        profile (when author
-                  #:conduit.profile{:bio       bio
-                                    :following following
-                                    :image     image
-                                    :username  username})]
-    (merge profile
-           (when author
-             {::article/author profile})
-           {::article/title           title
-            ::article/created-at      (new js/Date createdAt)
-            ::article/slug            slug
-            ::article/updated-at      updatedAt
-            ::article/description     description
-            ::article/favorited?      favorited
-            ::article/favorites-count favoritesCount
-            ::article/tag-list        (for [tag tagList]
-                                        {::tag/tag tag})
+  (let [profile (when author
+                  (qualify-profile author))]
+    (into {}
+          (remove (comp nil? val))
+          (merge profile
+                 (when author
+                   {::article/author profile})
+                 {::article/title           title
+                  ::article/created-at      (new js/Date createdAt)
+                  ::article/slug            slug
+                  ::article/updated-at      updatedAt
+                  ::article/description     description
+                  ::article/favorited?      favorited
+                  ::article/favorites-count favoritesCount
+                  ::article/tag-list        (for [tag tagList]
+                                              {::tag/tag tag})
 
-            ::article/body            body})))
+                  ::article/body            body}))))
 
 (def register
   [(pc/constantly-resolver
@@ -613,6 +620,22 @@
                     (let [result (async/<! (fetch ctx {::path (str "/articles/" slug)}))
                           {:strs [article]} (js->clj result)]
                       (qualify-article article)))))
+   (pc/resolver `comments
+                {::pc/input  #{:conduit.article/slug}
+                 ::pc/output [::article/comments]}
+                (fn [ctx {:conduit.article/keys [slug]}]
+                  (async/go
+                    (let [result (async/<! (fetch ctx {::path (str "/articles/" slug "/comments")}))
+                          {:strs [comments]} (js->clj result)]
+                      {::article/comments (for [{:strs [id body createdAt author updatedAt]} comments
+                                                :let [profile (qualify-profile author)]]
+                                            (merge
+                                              profile
+                                              {:conduit.comment/id         id
+                                               :conduit.comment/body       body
+                                               :conduit.comment/author     author
+                                               :conduit.comment/created-at (new js/Date createdAt)
+                                               :conduit.comment/updated-at (new js/Date updatedAt)}))}))))
    (pc/resolver `profile
                 {::pc/input  #{:conduit.profile/username}
                  ::pc/output [:conduit.profile/bio
