@@ -208,7 +208,7 @@
         :.row.article-content
         (dom/div
           :.col-md-12
-          (dom/pre body)))
+          (ui/markdown body)))
       (dom/hr)
       (dom/div
         :.article-actions

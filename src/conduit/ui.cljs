@@ -4,7 +4,16 @@
             [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
             [conduit.article :as article]
             [conduit.profile :as profile]
-            [conduit.tag :as tag]))
+            [conduit.tag :as tag]
+            ["marksy" :as md]
+            ["react" :as r]))
+
+(def markdown-impl
+  (md/marksy #js {:createElement r/createElement}))
+
+(defn markdown
+  [s]
+  (.-tree (markdown-impl s)))
 
 (defn show-date
   [x]
@@ -81,7 +90,8 @@
     :.card
     (dom/div
       :.card-block
-      (dom/p :.card-text body))
+      (dom/p :.card-text
+             (markdown body)))
     (dom/div
       :.card-footer
       (dom/a :.comment-author {:href ""}
