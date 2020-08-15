@@ -143,16 +143,17 @@
 (def ui-article-preview (comp/factory ArticlePreview {:keyfn :conduit.article/slug}))
 
 (report/defsc-report ArticleFeed [this props]
-  {ro/source-attribute ::articles
-   ro/run-on-mount?    true
-   ro/row-pk           article/slug
-   ro/columns          [article/description
-                        article/title
-                        article/favorites-count
-                        article/created-at
-                        article/slug
-                        profile/image
-                        profile/username]}
+  {ro/source-attribute    ::articles
+   ro/run-on-mount?       true
+   ro/row-pk              article/slug
+   ro/columns             [article/description
+                           article/title
+                           article/favorites-count
+                           article/created-at
+                           article/slug
+                           profile/image
+                           profile/username]
+   ro/row-query-inclusion [{::article/tag-list (comp/get-query TagPill)}]}
   (let [{:ui/keys [current-rows]} props]
     (for [{:conduit.profile/keys [image username]
            :conduit.article/keys [title created-at slug
@@ -188,7 +189,12 @@
           (dom/span "Read more...")
           (dom/ul
             {:className "tag-list"}
-            (map ui-tag-pill tag-list)))))))
+            (for [{::tag/keys [tag]} tag-list]
+              (dom/li
+                {:key       tag
+                 :className "tag-default tag-pill tag-outline"
+                 :href      (path->href this ["feed"] :tab (str "#" tag))}
+                tag))))))))
 
 (def ui-article-feed (comp/factory ArticleFeed))
 
@@ -757,6 +763,7 @@
              {::article/author profile})
            {::article/title           title
             ::article/created-at      createdAt
+            ::article/slug            slug
             ::article/updated-at      updatedAt
             ::article/description     description
             ::article/favorited?      favorited
