@@ -19,6 +19,7 @@
     [com.fulcrologic.rad.container-options :as co]
     [conduit.article :as article]
     [conduit.tag :as tag]
+    [conduit.ui :as ui]
     [conduit.feed-button :as feed-button]
     [conduit.profile :as profile]
     [edn-query-language.core :as eql]
@@ -62,17 +63,6 @@
 
 (def ui-tag-pill (comp/factory TagPill {:keyfn :conduit.tag/tag}))
 
-(defn ui-banner
-  []
-  (dom/div
-    {:className "banner"}
-    (dom/div
-      {:className "container"}
-      (dom/h1
-        {:className "logo-font"}
-        "conduit")
-      (dom/p "A place to share your knowledge."))))
-
 (report/defsc-report FeedToggle [this props]
   {ro/source-attribute ::feed-toggle
    ro/run-on-mount?    true
@@ -94,53 +84,6 @@
 
 
 (def ui-feed-toggle (comp/factory FeedToggle))
-
-(defsc ArticlePreview [this {:conduit.profile/keys [image username]
-                             :conduit.article/keys [title created-at slug
-                                                    description tag-list favorites-count]}]
-  {:query [:conduit.article/description
-           :conduit.article/title
-           :conduit.article/favorites-count
-           :conduit.article/created-at
-           :conduit.article/slug
-           ;; TODO: How to do it in RAD?
-           {:conduit.article/tag-list (comp/get-query TagPill)}
-           :conduit.profile/image
-           :conduit.profile/username]
-   :ident :conduit.article/slug}
-  (dom/div
-    {:className "article-preview"}
-    (dom/div
-      {:className "article-meta"}
-      (dom/a
-        {:href (path->href this ["profile" username])})
-      (dom/img
-        {:src image})
-      (dom/div
-        {:className "info"}
-        (dom/a
-          {:className "author"
-           :href      (path->href this ["profile" username])}
-          username)
-        (dom/span
-          {:className "date"}
-          created-at))
-      (dom/button
-        {:className "btn btn-outline-primary btn-sm pull-xs-right"}
-        (dom/i
-          {:className "ion-heart"})
-        favorites-count))
-    (dom/a
-      {:className "preview-link"
-       :href      (path->href this ["article" slug])}
-      (dom/h1 title)
-      (dom/p description)
-      (dom/span "Read more...")
-      (dom/ul
-        {:className "tag-list"}
-        (map ui-tag-pill tag-list)))))
-
-(def ui-article-preview (comp/factory ArticlePreview {:keyfn :conduit.article/slug}))
 
 (report/defsc-report ArticleFeed [this props]
   {ro/source-attribute    ::articles
@@ -228,7 +171,7 @@
                 popular-tags]} props]
     (dom/div
       {:className "home-page"}
-      (ui-banner)
+      (ui/banner)
       (dom/div
         {:className "container page"}
         (dom/div
@@ -384,38 +327,22 @@
             (map ui-error-message errors))
           (when redirect
             (ui-redirect redirect))
-          (dom/form
-            {:onSubmit (fn [e]
-                         (.preventDefault e)
-                         (let [form (-> e .-target)
-                               email (-> form (gobj/get "email") .-value)
-                               password (-> form (gobj/get "password") .-value)]
-                           (comp/transact! this `[(conduit.profile/login ~{:conduit.profile/email    email
-                                                                           :conduit.profile/password password})])))}
-            (dom/fieldset
-              {:className "form-group"}
-              (dom/input
-                {:className   "form-control form-control-lg"
-                 :type        "text"
-                 :name        "email"
-                 :placeholder "Email"}))
-            (dom/fieldset
-              {:className "form-group"}
-              (dom/input
-                {:className   "form-control form-control-lg"
-                 :type        "password",
-                 :name        "password"
-                 :placeholder "Password"}))
-            (dom/button
-              {:className "btn btn-lg btn-primary pull-xs-right"
-               :disabled  loading?}
-              (if loading?
-                "loading ..."
-                "Sign in"))))))))
+          (ui/form
+            {::ui/on-submit    (when-not loading?
+                                 (fn [params]
+                                   (comp/transact! this `[(conduit.profile/login ~params)])))
+             ::ui/attributes   [::profile/email
+                                ::profile/password]
+             ::ui/labels       {::profile/email    "Email"
+                                ::profile/password "Password"}
+             ::ui/submit-label (if loading?
+                                 "loading ..."
+                                 "Sign in")
+             ::ui/types        {::profile/password "password"}}))))))
 
-(defsc SignUp [this {::keys [errors]}]
+(defsc SignUp [this {::keys [loading? errors]}]
   {:ident         (fn [] [:component/id ::sign-up])
-   :query         [:conduit.profile.login/loading?
+   :query         [::loading?
                    :conduit.profile/username
                    :conduit.profile/email
                    ::top-routes
@@ -442,40 +369,20 @@
           (dom/ul
             {:className "error-messages"}
             (map ui-error-message errors))
-          (dom/form
-            {:onSubmit (fn [e]
-                         (.preventDefault e)
-                         (let [form (-> e .-target)
-                               email (-> form (gobj/get "email") .-value)
-                               username (-> form (gobj/get "username") .-value)
-                               password (-> form (gobj/get "password") .-value)]
-                           (comp/transact! this `[(conduit.profile/register ~{:conduit.profile/email    email
-                                                                              :conduit.profile/username username
-                                                                              :conduit.profile/password password})])))}
-            (dom/fieldset
-              {:className "form-group"}
-              (dom/input
-                {:className   "form-control form-control-lg"
-                 :type        "text",
-                 :name        "username",
-                 :placeholder "Your Name"}))
-            (dom/fieldset
-              {:className "form-group"}
-              (dom/input
-                {:className   "form-control form-control-lg"
-                 :type        "text"
-                 :name        "email",
-                 :placeholder "Email"}))
-            (dom/fieldset
-              {:className "form-group"}
-              (dom/input
-                {:className   "form-control form-control-lg"
-                 :type        "password",
-                 :name        "password",
-                 :placeholder "Password"}))
-            (dom/button
-              {:className "btn btn-lg btn-primary pull-xs-right"}
-              "Sign up")))))))
+          (ui/form
+            {::ui/on-submit    (when-not loading?
+                                 (fn [params]
+                                   (comp/transact! this `[(conduit.profile/login ~params)])))
+             ::ui/attributes   [::profile/username
+                                ::profile/email
+                                ::profile/password]
+             ::ui/labels       {::profile/username "Your Name"
+                                ::profile/email    "Email"
+                                ::profile/password "Password"}
+             ::ui/submit-label (if loading?
+                                 "loading ..."
+                                 "Sign up")
+             ::ui/types        {::profile/password "password"}}))))))
 
 
 (m/defmutation conduit.profile/login
@@ -602,7 +509,17 @@
                 :.btn.btn-lg.btn-primary.pull-xs-right
                 "Update Settings"))))))))
 
-
+(defsc ArticlePreview [this params]
+  {:query [:conduit.article/description
+           :conduit.article/title
+           :conduit.article/favorites-count
+           :conduit.article/created-at
+           :conduit.article/slug
+           ;; TODO: How to do it in RAD?
+           {:conduit.article/tag-list (comp/get-query TagPill)}
+           :conduit.profile/image
+           :conduit.profile/username]
+   :ident :conduit.article/slug})
 (defsc Profile [this {:conduit.profile/keys [bio username image articles]}]
   {:query         [:conduit.profile/bio
                    :conduit.profile/username
@@ -630,9 +547,9 @@
             (dom/p
               bio)
             (dom/button
-              :.btn.btn-sm.btn-outline-secondary.action-btn)
-            (dom/i :.ion-plus-round
-                   (str "Follow " username))))))
+              :.btn.btn-sm.btn-outline-secondary.action-btn
+              (dom/i :.ion-plus-round
+                     (str "Follow " username)))))))
     (dom/div
       :.container
       (dom/div
@@ -648,8 +565,8 @@
                 (dom/a :.nav-link.active {:href ""} "My Articles"))
               (dom/li
                 :.nav-item)
-              (dom/a :.nav-link {:href ""} "Favorited Articles"))))
-        (map ui-article-preview articles)))))
+              (dom/a :.nav-link {:href ""} "Favorited Articles")))
+          (map ui/article-preview articles))))))
 
 (defrouter TopRouter [this {:keys [current-state]}]
   {:router-targets [Feed SignIn SignUp Article NewPost Settings Profile]}
