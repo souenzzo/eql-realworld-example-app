@@ -13,7 +13,7 @@
 
 (ws/defcard home
   (ctf3/fulcro-card
-    {::ctf3/root conduit/Feed}))
+    {::ctf3/root conduit/Home}))
 
 (ws/defcard login
   (ctf3/fulcro-card

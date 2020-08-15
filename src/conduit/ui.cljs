@@ -6,7 +6,8 @@
             [conduit.profile :as profile]
             [conduit.tag :as tag]
             ["marksy" :as md]
-            ["react" :as r]))
+            ["react" :as r]
+            [conduit.feed-button :as feed-button]))
 
 (def markdown-impl
   (md/marksy #js {:createElement r/createElement}))
@@ -24,12 +25,23 @@
                                              :year    "numeric"})))
 
 
-(defsc TagPill [this {::tag/keys [tag href]}]
+(defsc TagPillOutline [this {::tag/keys [tag href]}]
   {:query [::tag/tag
            ::tag/href]
    :ident ::tag/tag}
   (dom/li
     {:className "tag-default tag-pill tag-outline"
+     :href      href}
+    tag))
+
+(def ui-tag-pill-outline (comp/factory TagPillOutline {:keyfn ::tag/tag}))
+
+(defsc TagPill [this {::tag/keys [tag href]}]
+  {:query [::tag/tag
+           ::tag/href]
+   :ident ::tag/tag}
+  (dom/li
+    {:className "tag-default tag-pill"
      :href      href}
     tag))
 
@@ -90,8 +102,9 @@
     :.card
     (dom/div
       :.card-block
-      (dom/p :.card-text
-             (markdown body)))
+      (dom/section
+        {:className "card-text"}
+        (markdown body)))
     (dom/div
       :.card-footer
       (dom/a :.comment-author {:href ""}
@@ -100,10 +113,28 @@
       (dom/span :.date-posted (show-date created-at)))))
 
 (def ui-comment (comp/factory Comment {:keyfn :conduit.comment/id}))
+
+
+(defsc FeedButton [this {::feed-button/keys [label href]}]
+  {:query [::feed-button/href
+           ::feed-button/label]
+   :ident ::feed-button/label}
+  (dom/li
+    {:className "nav-item"
+     :key       label}
+    (dom/a {:className "nav-link disabled"
+            :href      href}
+           label)))
+
+
+(def ui-feed-button (comp/factory FeedButton {:keyfn ::feed-button/label}))
+
+
 (defsc ArticleMeta [this {::profile/keys [href image username]
                           ::article/keys [created-at
                                           favorites-count]}
                     {::keys [on-favorite
+                             on-fav
                              on-flow]}]
   {:query [::profile/href
            ::profile/image
@@ -126,39 +157,47 @@
         username)
       (dom/span
         {:className "date"}
-        (show-date created-at))
-      (when on-flow
-        (dom/button
-          {:onClick   on-flow
-           :className "btn btn-sm btn-outline-secondary"}
-          (dom/i
-            {:className "ion-plus-round"})
-          (str "Flow " username)))
-      (when on-favorite
-        (dom/button
-          {:onClick   on-favorite
-           :className "btn btn-sm btn-outline-primary"}
-          (dom/i
-            {:className "ion-heart"})
-          (str "Favorite Post " favorites-count))))))
+        (show-date created-at)))
+    (when on-fav
+      (dom/button
+        {:onClick on-fav
+         :className "btn btn-outline-primary btn-sm pull-xs-right"}
+        (dom/i {:className "ion-heart"})
+        favorites-count))
+    (when on-flow
+      (dom/button
+        {:onClick   on-flow
+         :className "btn btn-sm btn-outline-secondary"}
+        (dom/i
+          {:className "ion-plus-round"})
+        (str "Flow " username)))
+    (when on-favorite
+      (dom/button
+        {:onClick   on-favorite
+         :className "btn btn-sm btn-outline-primary"}
+        (dom/i
+          {:className "ion-heart"})
+        (str "Favorite Post " favorites-count)))))
 (def ui-article-meta (comp/factory ArticleMeta {:keyfn ::article/slug}))
 
-(defsc ArticlePreview [this {::article/keys [href
-                                             title
-                                             description
-                                             tag-list]
-                             :>/keys        [article-meta]}]
+(defsc ArticlePreview [this
+                       {::article/keys [href
+                                        title
+                                        description
+                                        tag-list]
+                        :>/keys        [article-meta]}
+                       computed]
   {:query [::article/href
            ::article/title
            ::article/description
            ::article/slug
-           {::article/tag-list (comp/get-query TagPill)}
+           {::article/tag-list (comp/get-query TagPillOutline)}
            {:>/article-meta (comp/get-query ArticleMeta)}]
    :ident ::article/slug}
   (dom/div
     {:key       title
      :className "article-preview"}
-    (ui-article-meta article-meta)
+    (ui-article-meta (comp/computed article-meta computed))
     (dom/a
       {:className "preview-link"
        :href      href}
@@ -167,7 +206,7 @@
       (dom/span "Read more...")
       (dom/ul
         {:className "tag-list"}
-        (map ui-tag-pill tag-list)))))
+        (map ui-tag-pill-outline tag-list)))))
 
 (def ui-article-preview (comp/factory ArticlePreview {:keyfn ::article/slug}))
 

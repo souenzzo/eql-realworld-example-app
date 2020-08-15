@@ -1,7 +1,7 @@
 (ns conduit.client
   (:require
     [clojure.core.async :as async]
-    [clojure.core.async.interop :refer-macros [<p!]]
+    [clojure.core.async.interop :refer [<p!]]
     [clojure.string :as string]
     [com.fulcrologic.fulcro.algorithms.tx-processing :as ftx]
     [com.fulcrologic.fulcro.application :as app]
@@ -11,12 +11,8 @@
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
     [com.fulcrologic.rad.application :as rad-app]
-    [com.fulcrologic.rad.report :as report]
-    [com.fulcrologic.rad.report-options :as ro]
     [com.wsscode.pathom.connect :as pc]
     [com.wsscode.pathom.core :as p]
-    [com.fulcrologic.rad.container :refer [defsc-container]]
-    [com.fulcrologic.rad.container-options :as co]
     [conduit.article :as article]
     [conduit.tag :as tag]
     [conduit.ui :as ui]
@@ -25,7 +21,6 @@
     [edn-query-language.core :as eql]
     [goog.events :as events]
     [goog.history.EventType :as et]
-    [goog.object :as gobj]
     [taoensso.timbre :as log])
   (:import (goog.history Html5History)))
 ;; TODO: Create a lib for "pathom remote"
@@ -41,138 +36,46 @@
                        :original-transaction ast
                        :status-code          200}))))
 
+(defn push!
+  [app path]
+  (let [{::keys [^Html5History history]} (comp/shared app)]
+    (.setToken  history path)))
 
-(defn path->href
-  [app path & {:as kvs}]
-  (str "#/" (string/join "/" (map js/encodeURIComponent path))
-       (when-not (empty? kvs)
-         (str "?" (string/join ""
-                               (map (fn [[k v]]
-                                      (str (js/encodeURIComponent (name k))
-                                           "=" (js/encodeURIComponent v)))
-                                    kvs))))))
-
-
-(report/defsc-report FeedToggle [this props]
-  {ro/source-attribute ::feed-toggle
-   ro/run-on-mount?    true
-   ro/row-pk           feed-button/label
-   ro/columns          [feed-button/label
-                        feed-button/href]}
-  (let [{:ui/keys [current-rows]} props]
+(defsc Home [this {::keys [articles
+                           feed-toggle
+                           popular-tags]}]
+  {:query         [{::feed-toggle (comp/get-query ui/FeedButton)}
+                   {::articles (comp/get-query ui/ArticlePreview)}
+                   {::popular-tags (comp/get-query ui/TagPill)}]
+   :ident         (fn []
+                    [:component/id ::home])
+   :route-segment ["home"]
+   :will-enter    (fn [app _]
+                    (dr/route-deferred [:component/id ::home]
+                                       #(df/load! app [:component/id ::home] Home
+                                                  {:post-mutation        `dr/target-ready
+                                                   :post-mutation-params {:target [:component/id ::home]}})))}
+  (dom/div
+    {:className "home-page"}
+    (ui/banner)
     (dom/div
-      {:className "feed-toggle"}
-      (dom/ul
-        {:className "nav nav-pills outline-active"}
-        (for [{::feed-button/keys [label href]} current-rows]
-          (dom/li
-            {:className "nav-item"
-             :key       label}
-            (dom/a {:className "nav-link disabled"
-                    :href      href}
-                   label)))))))
-
-
-(def ui-feed-toggle (comp/factory FeedToggle))
-
-(report/defsc-report ArticleFeed [this props]
-  {ro/source-attribute    ::articles
-   ro/run-on-mount?       true
-   ro/row-pk              article/slug
-   ro/columns             [article/description
-                           article/title
-                           article/favorites-count
-                           article/created-at
-                           article/slug
-                           profile/image
-                           profile/username]
-   ro/row-query-inclusion [{::article/tag-list (comp/get-query ui/TagPill)}]}
-  (let [{:ui/keys [current-rows]} props]
-    (for [{:conduit.profile/keys [image username]
-           :conduit.article/keys [title created-at slug
-                                  description tag-list favorites-count]} current-rows]
+      {:className "container page"}
       (dom/div
-        {:key       slug
-         :className "article-preview"}
+        {:className "row"}
         (dom/div
-          {:className "article-meta"}
-          (dom/a
-            {:href (path->href this ["profile" username])})
-          (dom/img
-            {:src image})
+          {:className "col-md-9"}
           (dom/div
-            {:className "info"}
-            (dom/a
-              {:className "author"
-               :href      (path->href this ["profile" username])}
-              username)
-            (dom/span
-              {:className "date"}
-              (ui/show-date created-at)))
-          (dom/button
-            {:className "btn btn-outline-primary btn-sm pull-xs-right"}
-            (dom/i
-              {:className "ion-heart"})
-            favorites-count))
-        (dom/a
-          {:className "preview-link"
-           :href      (path->href this ["article" slug])}
-          (dom/h1 title)
-          (dom/p description)
-          (dom/span "Read more...")
-          (dom/ul
-            {:className "tag-list"}
-            (for [{::tag/keys [tag]} tag-list]
-              (dom/li
-                {:key       tag
-                 :className "tag-default tag-pill tag-outline"
-                 :href      (path->href this ["feed"] :tab (str "#" tag))}
-                tag))))))))
-
-(def ui-article-feed (comp/factory ArticleFeed))
-
-(report/defsc-report PopularTags [this props]
-  {ro/source-attribute ::popular-tags
-   ro/run-on-mount?    true
-   ro/row-pk           tag/tag
-   ro/columns          [tag/tag]}
-  (let [{:ui/keys [current-rows]} props]
-    (dom/div
-      {:className "sidebar"}
-      (dom/p "Popular Tags")
-      (dom/div
-        {:className "tag-list"}
-        (for [{::tag/keys [tag]} current-rows]
-          (dom/a
-            {:key       tag
-             :className "tag-pill tag-default"
-             :href      (path->href this ["feed"] :tab (str "#" tag))}
-            tag))))))
-
-(def ui-popular-tags (comp/factory PopularTags))
-
-(defsc-container Feed [this props]
-  {co/children {:article-feed ArticleFeed
-                :feed-toggle  FeedToggle
-                :popular-tags PopularTags}
-   co/route    "feed"}
-  (let [{:keys [article-feed
-                feed-toggle
-                popular-tags]} props]
-    (dom/div
-      {:className "home-page"}
-      (ui/banner)
-      (dom/div
-        {:className "container page"}
+            {:className "feed-toggle"}
+            (dom/ul
+              {:className "nav nav-pills outline-active"}
+              (map ui/ui-feed-button feed-toggle)))
+          (for [article articles]
+            (ui/ui-article-preview (comp/computed article
+                                                  {::ui/on-fav (fn []
+                                                                 (push! this "#/login"))}))))
         (dom/div
-          {:className "row"}
-          (dom/div
-            {:className "col-md-9"}
-            (ui-feed-toggle feed-toggle)
-            (ui-article-feed article-feed))
-          (dom/div
-            {:className "col-md-3"}
-            (ui-popular-tags popular-tags)))))))
+          {:className "col-md-3"}
+          (map ui/ui-tag-pill popular-tags))))))
 
 (defsc Article [this {:>/keys        [article-meta]
                       ::profile/keys [username image]
@@ -206,8 +109,8 @@
       :.container.page
       (dom/div
         :.row.article-content
-        (dom/div
-          :.col-md-12
+        (dom/section
+          {:className "col-md-12"}
           (ui/markdown body)))
       (dom/hr)
       (dom/div
@@ -231,11 +134,10 @@
 
 (defsc Redirect [this {:conduit.redirect/keys [path]}]
   {:query [:conduit.redirect/path]}
-  (let [href (str "#/" (string/join "/" path))
-        {::keys [^Html5History history]} (comp/shared this)]
+  (let [{::keys [^Html5History history]} (comp/shared this)]
     (dom/a
-      {:href #(.setToken history href)}
-      href)))
+      {:href #(.setToken history path)}
+      path)))
 
 (def ui-redirect (comp/factory Redirect))
 
@@ -254,6 +156,7 @@
                    {:conduit.profile.login/redirect (comp/get-query Redirect)}]
    :route-segment ["login"]}
   (dom/div
+
     {:className "auth-page"}
     (dom/div
       {:className "container page"}
@@ -267,7 +170,7 @@
           (dom/p
             {:className "text-xs-center"}
             (dom/a
-              {:href (path->href this ["register"])}
+              {:href "#/register"}
               "Need an account?"))
           (dom/ul
             {:className "error-messages"}
@@ -311,7 +214,7 @@
           (dom/p
             {:className "text-xs-center"}
             (dom/a
-              {:href (path->href this ["login"])}
+              {:href "#/login"}
               "Have an account?"))
           (dom/ul
             {:className "error-messages"}
@@ -430,10 +333,12 @@
               (dom/li
                 :.nav-item)
               (dom/a :.nav-link {:href ""} "Favorited Articles")))
-          (map ui/ui-article-preview articles))))))
+          (for [article articles]
+            (ui/ui-article-preview (comp/computed article
+                                                 {::ui/on-fav (fn [])}))))))))
 
 (defrouter TopRouter [this {:keys [current-state]}]
-  {:router-targets [Feed SignIn SignUp Article NewPost Settings Profile]}
+  {:router-targets [Home SignIn SignUp Article NewPost Settings Profile]}
   (case current-state
     :pending (dom/div "Loading...")
     :failed (dom/div "Loading seems to have failed. Try another route.")
@@ -448,18 +353,18 @@
                     [::dr/id :conduit.client/TopRouter])
    :initial-state (fn [_]
                     {::top-routes [{::label "Home"
-                                    ::path  ["feed"]}
+                                    ::path  "#/home"}
                                    {::label "Sign in"
-                                    ::path  ["login"]}
+                                    ::path  "#/login"}
                                    {::label "Sign up"
-                                    ::path  ["register"]}]})}
+                                    ::path  "#/register"}]})}
   (let [current-route (dr/current-route this)]
     (dom/nav
       {:className "navbar navbar-light"}
       (dom/div
         {:className "container"}
         (dom/a {:className "navbar-brand"
-                :href      (path->href this ["feed"])}
+                :href      "#/home"}
                "conduit")
         (dom/ul
           {:className "nav navbar-nav pull-xs-right"}
@@ -468,7 +373,7 @@
               {:key       label
                :className "nav-item"}
               (dom/a
-                {:href    (path->href this path)
+                {:href    path
                  :classes ["nav-link" (when (= current-route path)
                                         "active")]}
                 label))))))))
@@ -481,7 +386,7 @@
     (dom/div
       {:className "container"}
       (dom/a {:className "logo-font"
-              :href      (path->href this ["feed"])}
+              :href      "#/home"}
              "conduit")
       (dom/span
         {:className "attribution"}
@@ -564,28 +469,28 @@
 (def register
   [(pc/constantly-resolver
      ::feed-toggle [{::feed-button/label "Your Feed"
-                     ::feed-button/href  (str "#/feed")}
+                     ::feed-button/href  (str "#/home")}
                     {::feed-button/label "Global Feed"
-                     ::feed-button/href  (str "#/feed")}])
+                     ::feed-button/href  (str "#/home")}])
    (pc/resolver `top-routes
                 {::pc/output [::top-routes]}
                 (fn [{::keys [authed-user]} _]
                   (let [username (-> @authed-user (get "username"))]
                     {::top-routes (if username
                                     [{::label "Home"
-                                      ::path  ["feed"]}
+                                      ::path  "#/home"}
                                      {::label "New Post"
-                                      ::path  ["editor"]}
+                                      ::path  "#/editor"}
                                      {::label "Settings"
-                                      ::path  ["settings" username]}
+                                      ::path  (str "#/settings/" username)}
                                      {::label username
-                                      ::path  ["profile" username]}]
+                                      ::path  (str "#/profile/" username)}]
                                     [{::label "Home"
-                                      ::path  ["feed"]}
+                                      ::path  "#/home"}
                                      {::label "Sign up"
-                                      ::path  ["register"]}
+                                      ::path  "#/register"}
                                      {::label "Sign in"
-                                      ::path  ["login"]}])})))
+                                      ::path  "#/login"}])})))
    (pc/mutation `conduit.profile/login
                 {::pc/params [:conduit.profile/password
                               :conduit.profile/email]
@@ -606,7 +511,7 @@
                          :conduit.profile.login/loading? false
                          :conduit.profile.login/errors   []
                          :conduit.profile.login/redirect (when (empty? errors)
-                                                           {:conduit.redirect/path ["feed"]})})))))
+                                                           {:conduit.redirect/path "#/home"})})))))
 
    (pc/resolver `article
                 {::pc/input  #{:conduit.article/slug}
@@ -620,6 +525,16 @@
                     (let [result (async/<! (fetch ctx {::path (str "/articles/" slug)}))
                           {:strs [article]} (js->clj result)]
                       (qualify-article article)))))
+   (pc/resolver `slug->href
+                {::pc/input  #{::article/slug}
+                 ::pc/output [::article/href]}
+                (fn [_ {::article/keys [slug]}]
+                  {::article/href (str "#/article/" slug)}))
+   (pc/resolver `username->href
+                {::pc/input  #{::profile/username}
+                 ::pc/output [::profile/href]}
+                (fn [_ {::profile/keys [username]}]
+                  {::profile/href (str "#/profile/" username)}))
    (pc/resolver `comments
                 {::pc/input  #{:conduit.article/slug}
                  ::pc/output [::article/comments]}
