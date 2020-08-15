@@ -53,16 +53,6 @@
                                     kvs))))))
 
 
-(defsc TagPill [this {:conduit.tag/keys [tag]}]
-  {:query [:conduit.tag/tag]
-   :ident :conduit.tag/tag}
-  (dom/li
-    {:className "tag-default tag-pill tag-outline"
-     :href      (path->href this ["feed"] :tab (str "#" tag))}
-    tag))
-
-(def ui-tag-pill (comp/factory TagPill {:keyfn :conduit.tag/tag}))
-
 (report/defsc-report FeedToggle [this props]
   {ro/source-attribute ::feed-toggle
    ro/run-on-mount?    true
@@ -96,7 +86,7 @@
                            article/slug
                            profile/image
                            profile/username]
-   ro/row-query-inclusion [{::article/tag-list (comp/get-query TagPill)}]}
+   ro/row-query-inclusion [{::article/tag-list (comp/get-query ui/TagPill)}]}
   (let [{:ui/keys [current-rows]} props]
     (for [{:conduit.profile/keys [image username]
            :conduit.article/keys [title created-at slug
@@ -118,7 +108,7 @@
               username)
             (dom/span
               {:className "date"}
-              created-at))
+              (ui/show-date created-at)))
           (dom/button
             {:className "btn btn-outline-primary btn-sm pull-xs-right"}
             (dom/i
@@ -184,12 +174,16 @@
             {:className "col-md-3"}
             (ui-popular-tags popular-tags)))))))
 
-(defsc Article [this {::profile/keys [username image]
-                      ::article/keys [slug body title favorites-count]}]
+(defsc Article [this {:>/keys        [article-meta]
+                      ::profile/keys [username image]
+                      ::article/keys [created-at comments body title favorites-count]}]
   {:query         [::article/body
                    ::profile/username
+                   ::article/comments
                    ::profile/image
+                   {:>/article-meta (comp/get-query ui/ArticleMeta)}
                    ::article/slug
+                   ::article/created-at
                    ::article/favorites-count
 
                    ::article/title]
@@ -207,18 +201,7 @@
       (dom/div
         :.container
         (dom/h1 title)
-        (dom/div
-          :.article-meta
-          (dom/a {:href (path->href this ["profile" username])}
-                 (dom/img {:src image}))
-          (dom/div :.info (dom/a :.author {:href (path->href this ["profile" username])}
-                                 username) (dom/span :.date "January 20th"))
-          (dom/button
-            :.btn.btn-sm.btn-outline-secondary
-            (dom/i :.ion-plus-round)
-            (str "Follow " username)
-            (dom/span :.counter (str "("  #_TODO ")")))
-          (dom/button :.btn.btn-sm.btn-outline-primary (dom/i :.ion-heart) "Favorite Post" (dom/span :.counter "(" favorites-count ")")))))
+        (ui/ui-article-meta article-meta)))
     (dom/div
       :.container.page
       (dom/div
@@ -229,50 +212,14 @@
       (dom/hr)
       (dom/div
         :.article-actions
-        (dom/div
-          :.article-meta
-          (dom/a {:href (path->href this ["profile" username])}
-                 (dom/img {:src image}))
-          (dom/div :.info (dom/a :.author {:href (path->href this ["profile" username])}
-                                 username) (dom/span :.date "January 20th"))
-          (dom/button
-            :.btn.btn-sm.btn-outline-secondary
-            (dom/i :.ion-plus-round)
-            (str "Follow " username)
-            (dom/span :.counter "(" #_TODO ")"))
-          (dom/button :.btn.btn-sm.btn-outline-primary (dom/i :.ion-heart) "Favorite Post" (dom/span :.counter "(" favorites-count ")"))))
+        (ui/ui-article-meta article-meta))
       (dom/div
         :.row
-        #_(dom/div
-            :.col-xs-12.col-md-8.offset-md-2
-            (dom/form
-              :.card.comment-form
-              (dom/div :.card-block (dom/textarea :.form-control {:placeholder "Write a comment...", :rows "3"}))
-              (dom/div)
-              :.card-footer
-              (dom/img :.comment-author-img {:src "http://i.imgur.com/Qr71crq.jpg"})
-              (dom/button :.btn.btn-sm.btn-primary "Post Comment"))
-            (dom/div
-              :.card
-              (dom/div)
-              :.card-block
-              (dom/p :.card-text "With supporting text below as a natural lead-in to additional content.")
-              (dom/div)
-              :.card-footer
-              (dom/a :.comment-author {:href ""} (dom/img :.comment-author-img {:src "http://i.imgur.com/Qr71crq.jpg"}))
-              (dom/a :.comment-author {:href ""} "Jacob Schmidt")
-              (dom/span :.date-posted "Dec 29th"))
-            (dom/div
-              :.card
-              (dom/div)
-              :.card-block
-              (dom/p :.card-text "With supporting text below as a natural lead-in to additional content.")
-              (dom/div)
-              :.card-footer
-              (dom/a :.comment-author {:href ""} (dom/img :.comment-author-img {:src "http://i.imgur.com/Qr71crq.jpg"}))
-              (dom/a :.comment-author {:href ""} "Jacob Schmidt")
-              (dom/span :.date-posted "Dec 29th")
-              (dom/span :.mod-options (dom/i :.ion-edit) (dom/i :.ion-trash-a))))))))
+        (dom/div
+          :.col-xs-12.col-md-8.offset-md-2
+          (ui/form {::ui/attributes   [:conduit.comment/body]
+                    ::ui/submit-label "Post Comment"})
+          (map ui/ui-comment comments))))))
 
 (defsc ErrorMessage [this {:conduit.error/keys [message]}]
   {:query [:conduit.error/message]
@@ -418,33 +365,11 @@
         :.row
         (dom/div
           :.col-md-10.offset-md-1.col-xs-12
-          (dom/form
-            (dom/fieldset
-              (dom/fieldset
-                :.form-group
-                (dom/input
-                  :.form-control.form-control-lg
-                  {:type "text", :placeholder "Article Title"}))
-              (dom/fieldset
-                :.form-group
-                (dom/input
-                  :.form-control
-                  {:type "text", :placeholder "What's this article about?"}))
-              (dom/fieldset
-                :.form-group
-                (dom/textarea
-                  :.form-control
-                  {:rows "8", :placeholder "Write your article (in markdown)"}))
-              (dom/fieldset
-                :.form-group
-                (dom/input
-                  :.form-control
-                  {:type "text", :placeholder "Enter tags"}))
-              (dom/div :.tag-list)
-              (dom/button
-                :.btn.btn-lg.pull-xs-right.btn-primary
-                {:type "button"}
-                "Publish Article"))))))))
+          (ui/form
+            {::ui/attributes [::article/title
+                              ::article/description
+                              ::article/body
+                              ::article/tags]}))))))
 
 (defsc Settings [this {:conduit.profile/keys [image username bio email]}]
   {:ident         :conduit.profile/username
@@ -467,64 +392,18 @@
         (dom/div
           :.col-md-6.offset-md-3.col-xs-12
           (dom/h1 :.text-xs-center "Your Settings")
-          (dom/form
-            {:onSubmit (fn [e]
-                         (.preventDefault e)
-                         (js/alert "TODO"))}
-            (dom/fieldset
-              (dom/fieldset
-                :.form-group
-                (dom/input
-                  :.form-control
-                  {:type         "text",
-                   :defaultValue image
-                   :placeholder  "URL of profile picture"}))
-              (dom/fieldset
-                :.form-group
-                (dom/input
-                  :.form-control.form-control-lg
-                  {:type         "text",
-                   :defaultValue username
-                   :placeholder  "Your Name"}))
-              (dom/fieldset
-                :.form-group
-                (dom/textarea
-                  :.form-control.form-control-lg
-                  {:rows         "8",
-                   :defaultValue bio
-                   :placeholder  "Short bio about you"}))
-              (dom/fieldset
-                :.form-group
-                (dom/input
-                  :.form-control.form-control-lg
-                  {:type         "text",
-                   :defaultValue email
-                   :placeholder  "Email"}))
-              (dom/fieldset
-                :.form-group
-                (dom/input
-                  :.form-control.form-control-lg
-                  {:type "password", :placeholder "Password"}))
-              (dom/button
-                :.btn.btn-lg.btn-primary.pull-xs-right
-                "Update Settings"))))))))
+          (ui/form
+            {::ui/attributes [::profile/image
+                              ::profile/username
+                              ::profile/bio
+                              ::profile/email
+                              ::profile/password]}))))))
 
-(defsc ArticlePreview [this params]
-  {:query [:conduit.article/description
-           :conduit.article/title
-           :conduit.article/favorites-count
-           :conduit.article/created-at
-           :conduit.article/slug
-           ;; TODO: How to do it in RAD?
-           {:conduit.article/tag-list (comp/get-query TagPill)}
-           :conduit.profile/image
-           :conduit.profile/username]
-   :ident :conduit.article/slug})
-(defsc Profile [this {:conduit.profile/keys [bio username image articles]}]
-  {:query         [:conduit.profile/bio
-                   :conduit.profile/username
-                   :conduit.profile/image
-                   {:conduit.profile/articles (comp/get-query ArticlePreview)}]
+(defsc Profile [this {:>/keys               [user-info]
+                      :conduit.profile/keys [articles]}]
+  {:query         [:conduit.profile/username
+                   {:>/user-info (comp/get-query ui/UserInfo)}
+                   {:conduit.profile/articles (comp/get-query ui/ArticlePreview)}]
    :ident         :conduit.profile/username
    :route-segment ["profile" :conduit.profile/username]
    :will-enter    (fn [app {:conduit.profile/keys [username]}]
@@ -534,22 +413,7 @@
                                                    :post-mutation-params {:target [:conduit.profile/username username]}})))}
   (dom/div
     :.profile-page
-    (dom/div
-      :.user-info
-      (dom/div
-        :.container
-        (dom/div
-          :.row
-          (dom/div
-            :.col-xs-12.col-md-10.offset-md-1
-            (dom/img :.user-img {:src image})
-            (dom/h4 username)
-            (dom/p
-              bio)
-            (dom/button
-              :.btn.btn-sm.btn-outline-secondary.action-btn
-              (dom/i :.ion-plus-round
-                     (str "Follow " username)))))))
+    (ui/ui-user-info user-info)
     (dom/div
       :.container
       (dom/div
@@ -566,7 +430,7 @@
               (dom/li
                 :.nav-item)
               (dom/a :.nav-link {:href ""} "Favorited Articles")))
-          (map ui/article-preview articles))))))
+          (map ui/ui-article-preview articles))))))
 
 (defrouter TopRouter [this {:keys [current-state]}]
   {:router-targets [Feed SignIn SignUp Article NewPost Settings Profile]}
@@ -679,7 +543,7 @@
            (when author
              {::article/author profile})
            {::article/title           title
-            ::article/created-at      createdAt
+            ::article/created-at      (new js/Date createdAt)
             ::article/slug            slug
             ::article/updated-at      updatedAt
             ::article/description     description
@@ -741,6 +605,7 @@
                 {::pc/input  #{:conduit.article/slug}
                  ::pc/output [::article/body
                               ::profile/image
+                              ::article/created-at
                               ::profile/username
                               ::article/title]}
                 (fn [ctx {:conduit.article/keys [slug]}]
