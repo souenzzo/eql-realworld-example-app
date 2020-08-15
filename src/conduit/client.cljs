@@ -205,7 +205,8 @@
         {:className "tag-list"}
         (for [{::tag/keys [tag]} current-rows]
           (dom/a
-            {:className "tag-pill tag-default"
+            {:key       tag
+             :className "tag-pill tag-default"
              :href      (path->href this ["feed"] :tab (str "#" tag))}
             tag))))))
 
@@ -234,12 +235,16 @@
             {:className "col-md-3"}
             (ui-popular-tags popular-tags)))))))
 
-(defsc Article [this {:conduit.profile/keys [username]
-                      :conduit.article/keys [slug body]}]
-  {:query         [:conduit.article/slug
-                   :conduit.profile/username
-                   :conduit.article/body]
-   :ident         :conduit.article/slug
+(defsc Article [this {::profile/keys [username image]
+                      ::article/keys [slug body title favorites-count]}]
+  {:query         [::article/body
+                   ::profile/username
+                   ::profile/image
+                   ::article/slug
+                   ::article/favorites-count
+
+                   ::article/title]
+   :ident         ::article/slug
    :route-segment ["article" :conduit.article/slug]
    :will-enter    (fn [app {:conduit.article/keys [slug]}]
                     (dr/route-deferred [:conduit.article/slug slug]
@@ -252,19 +257,19 @@
       :.banner
       (dom/div
         :.container
-        (dom/h1 "How to build webapps that scale")
+        (dom/h1 title)
         (dom/div
           :.article-meta
           (dom/a {:href (path->href this ["profile" username])}
-                 (dom/img {:src "http://i.imgur.com/Qr71crq.jpg"}))
+                 (dom/img {:src image}))
           (dom/div :.info (dom/a :.author {:href (path->href this ["profile" username])}
-                                 "Eric Simons") (dom/span :.date "January 20th"))
+                                 username) (dom/span :.date "January 20th"))
           (dom/button
             :.btn.btn-sm.btn-outline-secondary
             (dom/i :.ion-plus-round)
-            "Follow Eric Simons"
-            (dom/span :.counter "(10)"))
-          (dom/button :.btn.btn-sm.btn-outline-primary (dom/i :.ion-heart) "Favorite Post" (dom/span :.counter "(29)")))))
+            (str "Follow " username)
+            (dom/span :.counter (str "("  #_TODO ")")))
+          (dom/button :.btn.btn-sm.btn-outline-primary (dom/i :.ion-heart) "Favorite Post" (dom/span :.counter "(" favorites-count ")")))))
     (dom/div
       :.container.page
       (dom/div
@@ -278,15 +283,15 @@
         (dom/div
           :.article-meta
           (dom/a {:href (path->href this ["profile" username])}
-                 (dom/img {:src "http://i.imgur.com/Qr71crq.jpg"}))
+                 (dom/img {:src image}))
           (dom/div :.info (dom/a :.author {:href (path->href this ["profile" username])}
-                                 "Eric Simons") (dom/span :.date "January 20th"))
+                                 username) (dom/span :.date "January 20th"))
           (dom/button
             :.btn.btn-sm.btn-outline-secondary
             (dom/i :.ion-plus-round)
-            "Follow Eric Simons"
-            (dom/span :.counter "(10)"))
-          (dom/button :.btn.btn-sm.btn-outline-primary (dom/i :.ion-heart) "Favorite Post" (dom/span :.counter "(29)"))))
+            (str "Follow " username)
+            (dom/span :.counter "(" #_TODO ")"))
+          (dom/button :.btn.btn-sm.btn-outline-primary (dom/i :.ion-heart) "Favorite Post" (dom/span :.counter "(" favorites-count ")"))))
       (dom/div
         :.row
         #_(dom/div
@@ -736,6 +741,31 @@
           .json
           <p!))))
 
+(defn qualify-article
+  [{:strs [title slug body createdAt updatedAt tagList description author favorited favoritesCount]}]
+  (let [{:strs [bio
+                following
+                image
+                username]} author
+        profile (when author
+                  #:conduit.profile{:bio       bio
+                                    :following following
+                                    :image     image
+                                    :username  username})]
+    (merge profile
+           (when author
+             {::article/author profile})
+           {::article/title           title
+            ::article/created-at      createdAt
+            ::article/updated-at      updatedAt
+            ::article/description     description
+            ::article/favorited?      favorited
+            ::article/favorites-count favoritesCount
+            ::article/tag-list        (for [tag tagList]
+                                        {::tag/tag tag})
+
+            ::article/body            body})))
+
 (def register
   [(pc/constantly-resolver
      ::feed-toggle [{::feed-button/label "Your Feed"
@@ -785,13 +815,15 @@
 
    (pc/resolver `article
                 {::pc/input  #{:conduit.article/slug}
-                 ::pc/output [:conduit.article/body]}
+                 ::pc/output [::article/body
+                              ::profile/image
+                              ::profile/username
+                              ::article/title]}
                 (fn [ctx {:conduit.article/keys [slug]}]
                   (async/go
                     (let [result (async/<! (fetch ctx {::path (str "/articles/" slug)}))
-                          {:strs [article]} (js->clj result)
-                          {:strs [body]} article]
-                      {:conduit.article/body body}))))
+                          {:strs [article]} (js->clj result)]
+                      (qualify-article article)))))
    (pc/resolver `profile
                 {::pc/input  #{:conduit.profile/username}
                  ::pc/output [:conduit.profile/bio
@@ -807,33 +839,14 @@
                        :conduit.profile/following following}))))
    (pc/resolver `profile/articles
                 {::pc/input  #{:conduit.profile/username}
-                 ::pc/output [:conduit.profile/articles]}
+                 ::pc/output [::profile/article-count
+                              ::profile/articles]}
                 (fn [ctx {:conduit.profile/keys [username]}]
                   (async/go
                     (let [result (async/<! (fetch ctx {::path (str "/articles?author=" username "&limit=5&offset=0")}))
                           {:strs [articles articlesCount]} (js->clj result)]
-                      {:conduit.profile/articles (for [{:strs [updatedAt body author createdAt favorited slug tagList favoritesCount title
-                                                               description]} articles
-                                                       :let [{:strs [bio
-                                                                     following
-                                                                     image
-                                                                     username]} author
-                                                             profile #:conduit.profile{:bio       bio
-                                                                                       :following following
-                                                                                       :image     image
-                                                                                       :username  username}]]
-                                                   (merge
-                                                     profile
-                                                     #:conduit.article{:updated-at      updatedAt
-                                                                       :body            body
-                                                                       :created-at      createdAt
-                                                                       :favorited?      favorited
-                                                                       :slug            slug
-                                                                       :tag-list        (for [tag tagList]
-                                                                                          {:conduit.tag/tag tag})
-                                                                       :favorites-count favoritesCount
-                                                                       :title           title
-                                                                       :description     description}))}))))
+                      {::profile/article-count articlesCount
+                       ::profile/articles      (map qualify-article articles)}))))
 
    (pc/resolver `popular-tags
                 {::pc/output [::popular-tags]}
@@ -851,29 +864,8 @@
                           {:strs [articlesCount
                                   articles]} (js->clj result)]
                       {::articles-count articlesCount
-                       ::articles       (for [{:strs [updatedAt body createdAt author favorited slug tagList favoritesCount title
-                                                      description]} articles
-                                              :let [{:strs [bio
-                                                            following
-                                                            image
-                                                            username]} author
-                                                    profile #:conduit.profile{:bio       bio
-                                                                              :following following
-                                                                              :image     image
-                                                                              :username  username}]]
-                                          (merge
-                                            profile
-                                            #:conduit.article{:updated-at      updatedAt
-                                                              :body            body
-                                                              :created-at      createdAt
-                                                              :author          profile
-                                                              :favorited?      favorited
-                                                              :slug            slug
-                                                              :tag-list        (for [tag tagList]
-                                                                                 {:conduit.tag/tag tag})
-                                                              :favorites-count favoritesCount
-                                                              :title           title
-                                                              :description     description}))}))))])
+                       ::articles       (for [article articles]
+                                          (qualify-article article))}))))])
 
 (def parser
   (p/parallel-parser
