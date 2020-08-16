@@ -83,17 +83,11 @@
               (map ui/ui-tag-pill popular-tags))))))))
 
 (defsc Article [this {:>/keys        [article-meta]
-                      ::profile/keys [username image]
-                      ::article/keys [created-at comments body title favorites-count]}]
+                      ::article/keys [comments body title]}]
   {:query         [::article/body
-                   ::profile/username
                    {::article/comments (comp/get-query ui/Comment)}
-                   ::profile/image
                    {:>/article-meta (comp/get-query ui/ArticleMeta)}
                    ::article/slug
-                   ::article/created-at
-                   ::article/favorites-count
-
                    ::article/title]
    :ident         ::article/slug
    :route-segment ["article" :conduit.article/slug]
@@ -442,12 +436,10 @@
       (.setEnabled true))))
 
 (defn fetch
-  [{::keys [authed-user
-            api-url]} {::keys [path method body]
-                       :or    {method "GET"}}]
-  (let [authorization (some-> authed-user
+  [{::keys [jwt api-url]} {::keys [path method body]
+                           :or    {method "GET"}}]
+  (let [authorization (some-> jwt
                               deref
-                              ::profile/token
                               (->> (str "Token ")))
         headers (cond-> #js{"Content-Type" "application/json"}
                         authorization (doto (gobj/set "Authorization" authorization)))
@@ -465,6 +457,7 @@
            following
            token
            image
+           email
            username]}]
   (into {}
         (remove (comp nil? val))
@@ -472,6 +465,7 @@
                           :following following
                           :image     image
                           :token     token
+                          :email     email
                           :username  username}))
 
 (defn qualify-article
@@ -503,31 +497,37 @@
                      ::feed-button/href  (str "#/home")}])
    (pc/resolver `top-routes
                 {::pc/output [::top-routes]}
-                (fn [{::keys [authed-user]} _]
-                  (let [{::profile/keys [username image]} @authed-user]
-                    {::top-routes (if username
-                                    [{::label "Home"
-                                      ::path  "#/home"}
-                                     {::label "New Post"
-                                      ::icon  "ion-compose"
-                                      ::path  "#/editor"}
-                                     {::label "Settings"
-                                      ::icon  "ion-gear-a"
-                                      ::path  (str "#/settings")}
-                                     {::label username
-                                      ::img   image
-                                      ::path  (str "#/profile/" username)}]
-                                    [{::label "Home"
-                                      ::path  "#/home"}
-                                     {::label "Sign up"
-                                      ::path  "#/register"}
-                                     {::label "Sign in"
-                                      ::path  "#/login"}])})))
+                (fn [{:keys [parser]
+                      :as   env} _]
+                  (async/go
+                    {::top-routes (let [{::profile/keys [username
+                                                         image]} (-> (parser env [{::my-profile [::profile/username
+                                                                                                 ::profile/image]}])
+                                                                     async/<!
+                                                                     ::my-profile)]
+                                    (if username
+                                      [{::label "Home"
+                                        ::path  "#/home"}
+                                       {::label "New Post"
+                                        ::icon  "ion-compose"
+                                        ::path  "#/editor"}
+                                       {::label "Settings"
+                                        ::icon  "ion-gear-a"
+                                        ::path  (str "#/settings")}
+                                       {::label username
+                                        ::img   image
+                                        ::path  (str "#/profile/" username)}]
+                                      [{::label "Home"
+                                        ::path  "#/home"}
+                                       {::label "Sign up"
+                                        ::path  "#/register"}
+                                       {::label "Sign in"
+                                        ::path  "#/login"}]))})))
    (pc/mutation `conduit.profile/login
                 {::pc/params [:conduit.profile/password
                               :conduit.profile/email]
                  ::pc/output []}
-                (fn [{::keys [authed-user]
+                (fn [{::keys [jwt]
                       :as    env} {:conduit.profile/keys [email password]}]
                   (let [body #js {:user #js{:email    email
                                             :password password}}]
@@ -536,10 +536,11 @@
                                                            ::method "POST"
                                                            ::body   (js/JSON.stringify body)}))
                             {:strs [errors user]} (js->clj response)
-                            my-profile (assoc (qualify-profile user)
-                                         ::profile/email email)]
-                        (when-not (empty? user)
-                          (reset! authed-user my-profile))
+                            {::profile/keys [token]
+                             :as            my-profile} (assoc (qualify-profile user)
+                                                          ::profile/email email)]
+                        (when token
+                          (reset! jwt token))
                         (cond-> my-profile
                                 errors (assoc ::errors (for [[k vs] errors
                                                              v vs]
@@ -551,7 +552,7 @@
                               :conduit.profile/email
                               :conduit.profile/username]
                  ::pc/output []}
-                (fn [{::keys [authed-user]
+                (fn [{::keys [jwt]
                       :as    env} {:conduit.profile/keys [email password username]}]
                   (let [body #js {:user #js{:email    email
                                             :username username
@@ -561,10 +562,11 @@
                                                            ::method "POST"
                                                            ::body   (js/JSON.stringify body)}))
                             {:strs [errors user]} (js->clj response)
-                            my-profile (assoc (qualify-profile user)
-                                         ::profile/email email)]
-                        (when-not (empty? user)
-                          (reset! authed-user my-profile))
+                            {::profile/keys [token]
+                             :as            my-profile} (assoc (qualify-profile user)
+                                                          ::profile/email email)]
+                        (when token
+                          (reset! jwt token))
                         (cond-> my-profile
                                 errors (assoc ::errors (for [[k vs] errors
                                                              v vs]
@@ -572,14 +574,6 @@
                                                           :conduit.error/message (str k ": " v)}))
                                 (empty? errors) (assoc ::redirect {:conduit.redirect/path "#/home"})))))))
    (pc/constantly-resolver ::waiting? false)
-   (pc/resolver `session-image
-                {::pc/output [:conduit.session/image]}
-                (fn [{::keys [authed-user]}]
-                  (some-> authed-user
-                          deref
-                          (get "image")
-                          (->> (hash-map :conduit.session/image)))))
-
    (pc/resolver `article
                 {::pc/input  #{:conduit.article/slug}
                  ::pc/output [::article/body
@@ -620,12 +614,13 @@
                                                :conduit.comment/updated-at (new js/Date updatedAt)}))}))))
    (pc/resolver `current-user
                 {::pc/output [::my-profile]}
-                (fn [{::keys [authed-user]
+                (fn [{::keys [jwt]
                       :as    env} _]
                   (async/go
-                    (let [result (async/<! (fetch env {::path (str "/user")}))
-                          {:strs [user]} (js->clj result)]
-                      {::my-profile (swap! authed-user merge (qualify-profile user))}))))
+                    (when @jwt
+                      (let [result (async/<! (fetch env {::path (str "/user")}))
+                            {:strs [user]} (js->clj result)]
+                        {::my-profile (qualify-profile user)})))))
    (pc/resolver `profile
                 {::pc/input  #{:conduit.profile/username}
                  ::pc/output [:conduit.profile/bio
@@ -676,9 +671,8 @@
 (def remote
   {:transmit!               transmit!
    :parser                  parser
-   ::authed-user            (storage/atom {::storage/storage  js/localStorage
-                                           ::storage/type     :json
-                                           ::storage/key-name "conduit.client.authed-user"})
+   ::jwt                    (storage/atom {::storage/storage  js/localStorage
+                                           ::storage/key-name "jwt"})
    ::api-url                "https://conduit.productionready.io/api"
    ::p/reader               [p/map-reader
                              pc/parallel-reader
