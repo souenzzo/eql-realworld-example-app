@@ -75,7 +75,12 @@
                                                                  (push! this "#/login"))}))))
         (dom/div
           {:className "col-md-3"}
-          (map ui/ui-tag-pill popular-tags))))))
+          (dom/div
+            {:className "sidebar"}
+            (dom/p "Popular tags")
+            (dom/div
+              {:className "tag-list"}
+              (map ui/ui-tag-pill popular-tags))))))))
 
 (defsc Article [this {:>/keys        [article-meta]
                       ::profile/keys [username image]
@@ -124,18 +129,6 @@
                     ::ui/submit-label "Post Comment"})
           (map ui/ui-comment comments))))))
 
-
-(defsc ErrorMessage [this {:conduit.error/keys [message hidden?]}]
-  {:query [:conduit.error/id
-           :conduit.error/hidden?
-           :conduit.error/message]
-   :ident :conduit.error/id}
-  (dom/li {:onClick #(m/set-value! this :conduit.error/hidden? true)
-           :hidden  hidden?}
-          message))
-
-(def ui-error-message (comp/factory ErrorMessage {:keyfn :conduit.error/id}))
-
 (defsc Redirect [this {:conduit.redirect/keys [path]}]
   {:query [:conduit.redirect/path]}
   (let [{::keys [^Html5History history]} (comp/shared this)]
@@ -145,15 +138,10 @@
 
 (def ui-redirect (comp/factory Redirect))
 
-(defsc SignIn [this {::keys [waiting?
-                             errors
-                             redirect]
-                     :as    props}]
+(defsc SignIn [this {::keys [waiting? errors redirect]}]
   {:ident         (fn [] [::session ::my-profile])
    :query         [::waiting?
-                   :conduit.profile/username
-                   :conduit.profile/email
-                   {::errors (comp/get-query ErrorMessage)}
+                   {::errors (comp/get-query ui/ErrorMessage)}
                    {::redirect (comp/get-query Redirect)}]
    :will-enter    (fn [app _]
                     (dr/route-deferred [::session ::my-profile]
@@ -179,7 +167,12 @@
               "Need an account?"))
           (dom/ul
             {:className "error-messages"}
-            (map ui-error-message errors))
+            (for [error errors
+                  :let [on-remove (fn []
+                                    (m/set-value! this
+                                                  ::errors (remove #{error} errors)))]]
+              (ui/ui-error-message (comp/computed error
+                                                  {::ui/on-remove on-remove}))))
           (when redirect
             (ui-redirect redirect))
           (ui/form
@@ -195,14 +188,28 @@
                                  "Sign in")
              ::ui/types        {::profile/password "password"}}))))))
 
-(defsc SignUp [this {::keys [loading? errors]}]
-  {:ident         (fn [] [:component/id ::sign-up])
-   :query         [::loading?
-                   :conduit.profile/username
-                   :conduit.profile/email
-                   ::top-routes
-                   {::errors (comp/get-query ErrorMessage)}
-                   {:conduit.profile.login/redirect (comp/get-query Redirect)}]
+(m/defmutation conduit.profile/login
+  [{:conduit.profile/keys [email password]}]
+  (action [{:keys [ref state] :as env}]
+          (swap! state (fn [st]
+                         (-> st
+                             (update-in ref assoc
+                                        ::errors []
+                                        ::waiting? true)))))
+  (remote [env]
+          (-> env
+              (m/returning SignIn))))
+
+(defsc SignUp [this {::keys [waiting? errors redirect]}]
+  {:ident         (fn [] [::session ::my-profile])
+   :query         [::waiting?
+                   {::errors (comp/get-query ui/ErrorMessage)}
+                   {::redirect (comp/get-query Redirect)}]
+   :will-enter    (fn [app _]
+                    (dr/route-deferred [::session ::my-profile]
+                                       #(df/load! app [::session ::my-profile] SignUp
+                                                  {:post-mutation        `dr/target-ready
+                                                   :post-mutation-params {:target [::session ::my-profile]}})))
    :route-segment ["register"]}
   (dom/div
     {:className "auth-page"}
@@ -222,32 +229,41 @@
               "Have an account?"))
           (dom/ul
             {:className "error-messages"}
-            (map ui-error-message errors))
+            (for [error errors
+                  :let [on-remove (fn []
+                                    (m/set-value! this
+                                                  ::errors (remove #{error} errors)))]]
+              (ui/ui-error-message (comp/computed error
+                                                  {::ui/on-remove on-remove}))))
+          (when redirect
+            (ui-redirect redirect))
           (ui/form
-            {::ui/on-submit    (when-not loading?
+            {::ui/on-submit    (when-not waiting?
                                  (fn [params]
-                                   (comp/transact! this `[(conduit.profile/login ~params)])))
+                                   (comp/transact! this `[(conduit.profile/register ~params)])))
              ::ui/attributes   [::profile/username
                                 ::profile/email
                                 ::profile/password]
              ::ui/labels       {::profile/username "Your Name"
                                 ::profile/email    "Email"
                                 ::profile/password "Password"}
-             ::ui/submit-label (if loading?
-                                 "loading ..."
+             ::ui/submit-label (if waiting?
+                                 "Signing up ..."
                                  "Sign up")
              ::ui/types        {::profile/password "password"}}))))))
 
-
-(m/defmutation conduit.profile/login
+(m/defmutation conduit.profile/register
   [{:conduit.profile/keys [email password]}]
   (action [{:keys [ref state] :as env}]
           (swap! state (fn [st]
                          (-> st
-                             (update-in ref assoc ::waiting? true)))))
+                             (update-in ref assoc
+                                        ::errors []
+                                        ::waiting? true)))))
   (remote [env]
           (-> env
               (m/returning SignIn))))
+
 
 (defsc NewPost [this props]
   {:ident         (fn []
@@ -511,6 +527,31 @@
                                             :password password}}]
                     (async/go
                       (let [response (async/<! (fetch env {::path   "/users/login"
+                                                           ::method "POST"
+                                                           ::body   (js/JSON.stringify body)}))
+                            {:strs [errors user]} (js->clj response)
+                            my-profile (assoc (qualify-profile user)
+                                         ::profile/email email)]
+                        (when-not (empty? user)
+                          (reset! authed-user my-profile))
+                        (cond-> my-profile
+                                errors (assoc ::errors (for [[k vs] errors
+                                                             v vs]
+                                                         {:conduit.error/id      (str (gensym "conduit.error"))
+                                                          :conduit.error/message (str k ": " v)}))
+                                (empty? errors) (assoc ::redirect {:conduit.redirect/path "#/home"})))))))
+   (pc/mutation `conduit.profile/register
+                {::pc/params [:conduit.profile/password
+                              :conduit.profile/email
+                              :conduit.profile/username]
+                 ::pc/output []}
+                (fn [{::keys [authed-user]
+                      :as    env} {:conduit.profile/keys [email password username]}]
+                  (let [body #js {:user #js{:email    email
+                                            :username username
+                                            :password password}}]
+                    (async/go
+                      (let [response (async/<! (fetch env {::path   "/users"
                                                            ::method "POST"
                                                            ::body   (js/JSON.stringify body)}))
                             {:strs [errors user]} (js->clj response)

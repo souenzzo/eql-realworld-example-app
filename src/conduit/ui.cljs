@@ -40,7 +40,7 @@
   {:query [::tag/tag
            ::tag/href]
    :ident ::tag/tag}
-  (dom/li
+  (dom/a
     {:className "tag-default tag-pill"
      :href      href}
     tag))
@@ -239,3 +239,13 @@
               (str "Follow " username))))))))
 
 (def ui-user-info (comp/factory UserInfo {:keyfn ::profile/username}))
+
+(defsc ErrorMessage [this {:conduit.error/keys [message]
+                           :as                 props}
+                     {::keys [on-remove]}]
+  {:query [:conduit.error/message]}
+  (dom/li {:onClick (when on-remove
+                      (partial on-remove props))}
+          message))
+
+(def ui-error-message (comp/factory ErrorMessage {:keyfn :conduit.error/message}))
