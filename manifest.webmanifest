@@ -1,0 +1,10 @@
+{
+  "name": "Conduit",
+  "display": "minimal-ui",
+  "short_name": "Conduit",
+  "theme_color": "#5cb85c",
+  "start_url": "https://souenzzo.com.br/eql-realworld-example-app/#/home",
+  "background_color": "#ffffff",
+  "manifest_version": 2,
+  "version": "1"
+}
