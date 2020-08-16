@@ -111,7 +111,9 @@
     (dom/div
       :.card-footer
       (dom/a :.comment-author {:href ""}
-             (dom/img :.comment-author-img {:src image}))
+             (dom/img :.comment-author-img
+                      {:alt (str "profile of " username)
+                       :src image}))
       (dom/a :.comment-author {:href ""} username)
       (dom/span :.date-posted (show-date created-at)))))
 
@@ -151,7 +153,8 @@
     (dom/a
       {:href href}
       (dom/img
-        {:src image}))
+        {:alt (str "profile of " username)
+         :src image}))
     (dom/div
       {:className "info"}
       (dom/a
@@ -227,7 +230,8 @@
         :.row
         (dom/div
           :.col-xs-12.col-md-10.offset-md-1
-          (dom/img :.user-img {:src image})
+          (dom/img :.user-img {:alt (str "profile of " username)
+                               :src image})
           (dom/h4 username)
           (dom/p
             bio)

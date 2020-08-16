@@ -393,6 +393,8 @@
 
 (def ui-header (comp/factory Header))
 
+(goog-define VERSION "develop")
+
 (defsc Footer [this {::keys []}]
   {:query []}
   (dom/footer
@@ -405,7 +407,11 @@
         {:className "attribution"}
         "An interactive learning project from "
         (dom/a {:href "https://thinkster.io"} "Thinkster")
-        ". Code & design licensed under MIT."))))
+        ". Code & design licensed under MIT."))
+    (dom/div
+      {:className "container"}
+      (dom/code
+        (str "v: " VERSION)))))
 
 (def ui-footer (comp/factory Footer))
 
