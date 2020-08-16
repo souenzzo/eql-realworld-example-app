@@ -16,8 +16,8 @@ node_modules:
 	npm install
 
 deploy: clean target/conduit/main.js
-	cp target/conduit/main.js gh-pages/conduit.js
-	cp target/workspace/main.js gh-pages/workspace.js
-	cp target/conduit/main.js.map gh-pages/conduit.js.map
-	cp target/workspace/main.js.map gh-pages/workspace.js.map
+	cp target/conduit/main.js       gh-pages/conduit/main.js
+	cp target/conduit/main.js.map   gh-pages/conduit/main.js.map
+	cp target/workspace/main.js     gh-pages/workspace/main.js
+	cp target/workspace/main.js.map gh-pages/workspace/main.js.map
 	cd gh-pages && git commit -am'+main.js' && git push origin gh-pages
