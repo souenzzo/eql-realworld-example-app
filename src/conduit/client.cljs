@@ -19,7 +19,7 @@
     [conduit.feed-button :as feed-button]
     [conduit.profile :as profile]
     [goog.object :as gobj]
-    [conduit.local-storage :as ls]
+    [conduit.storage :as storage]
     [edn-query-language.core :as eql]
     [goog.events :as events]
     [goog.history.EventType :as et]
@@ -514,8 +514,6 @@
                             {:strs [errors user]} (js->clj response)
                             {:strs [username]} user]
                         (when-not (empty? user)
-                          (ls/set! ::authed-user (doto (gobj/get response "user")
-                                                   (gobj/set "email" email)))
                           (reset! authed-user (assoc user "email" email)))
                         (cond-> {:conduit.profile/username username
                                  :conduit.profile/email    email
@@ -634,7 +632,9 @@
 (def remote
   {:transmit!               transmit!
    :parser                  parser
-   ::authed-user            (atom (js->clj (ls/get ::authed-user)))
+   ::authed-user            (storage/atom {::storage/storage  js/localStorage
+                                           ::storage/type     :json
+                                           ::storage/key-name "conduit.client.authed-user"})
    ::api-url                "https://conduit.productionready.io/api"
    ::p/reader               [p/map-reader
                              pc/parallel-reader
