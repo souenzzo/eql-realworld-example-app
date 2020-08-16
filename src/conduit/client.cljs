@@ -10,16 +10,10 @@
     [com.fulcrologic.fulcro.dom :as dom]
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
-    [com.fulcrologic.rad.application :as rad-app]
     [com.wsscode.pathom.connect :as pc]
     [com.wsscode.pathom.core :as p]
-    [conduit.article :as article]
-    [conduit.tag :as tag]
     [conduit.ui :as ui]
-    [conduit.feed-button :as feed-button]
-    [conduit.profile :as profile]
     [goog.object :as gobj]
-    [conduit.storage :as storage]
     [edn-query-language.core :as eql]
     [goog.events :as events]
     [goog.history.EventType :as et])
@@ -82,14 +76,14 @@
               {:className "tag-list"}
               (map ui/ui-tag-pill popular-tags))))))))
 
-(defsc Article [this {:>/keys        [article-meta]
-                      ::article/keys [comments body title]}]
-  {:query         [::article/body
-                   {::article/comments (comp/get-query ui/Comment)}
+(defsc Article [this {:>/keys               [article-meta]
+                      :conduit.article/keys [comments body title]}]
+  {:query         [:conduit.article/body
+                   {:conduit.article/comments (comp/get-query ui/Comment)}
                    {:>/article-meta (comp/get-query ui/ArticleMeta)}
-                   ::article/slug
-                   ::article/title]
-   :ident         ::article/slug
+                   :conduit.article/slug
+                   :conduit.article/title]
+   :ident         :conduit.article/slug
    :route-segment ["article" :conduit.article/slug]
    :will-enter    (fn [app {:conduit.article/keys [slug]}]
                     (dr/route-deferred [:conduit.article/slug slug]
@@ -173,14 +167,14 @@
             {::ui/on-submit    (when-not waiting?
                                  (fn [params]
                                    (comp/transact! this `[(conduit.profile/login ~params)])))
-             ::ui/attributes   [::profile/email
-                                ::profile/password]
-             ::ui/labels       {::profile/email    "Email"
-                                ::profile/password "Password"}
+             ::ui/attributes   [:conduit.profile/email
+                                :conduit.profile/password]
+             ::ui/labels       {:conduit.profile/email    "Email"
+                                :conduit.profile/password "Password"}
              ::ui/submit-label (if waiting?
                                  "Signing in ..."
                                  "Sign in")
-             ::ui/types        {::profile/password "password"}}))))))
+             ::ui/types        {:conduit.profile/password "password"}}))))))
 
 (m/defmutation conduit.profile/login
   [{:conduit.profile/keys [email password]}]
@@ -235,16 +229,16 @@
             {::ui/on-submit    (when-not waiting?
                                  (fn [params]
                                    (comp/transact! this `[(conduit.profile/register ~params)])))
-             ::ui/attributes   [::profile/username
-                                ::profile/email
-                                ::profile/password]
-             ::ui/labels       {::profile/username "Your Name"
-                                ::profile/email    "Email"
-                                ::profile/password "Password"}
+             ::ui/attributes   [:conduit.profile/username
+                                :conduit.profile/email
+                                :conduit.profile/password]
+             ::ui/labels       {:conduit.profile/username "Your Name"
+                                :conduit.profile/email    "Email"
+                                :conduit.profile/password "Password"}
              ::ui/submit-label (if waiting?
                                  "Signing up ..."
                                  "Sign up")
-             ::ui/types        {::profile/password "password"}}))))))
+             ::ui/types        {:conduit.profile/password "password"}}))))))
 
 (m/defmutation conduit.profile/register
   [{:conduit.profile/keys [email password]}]
@@ -273,10 +267,10 @@
         (dom/div
           :.col-md-10.offset-md-1.col-xs-12
           (ui/form
-            {::ui/attributes [::article/title
-                              ::article/description
-                              ::article/body
-                              ::article/tags]}))))))
+            {::ui/attributes [:conduit.article/title
+                              :conduit.article/description
+                              :conduit.article/body
+                              :conduit.article/tags]}))))))
 
 (defsc Settings [this {:conduit.profile/keys [image username bio email]
                        :as                   props}]
@@ -303,11 +297,11 @@
                   "Your Settings")
           (ui/form
             {::ui/default-values props
-             ::ui/attributes     [::profile/image
-                                  ::profile/username
-                                  ::profile/bio
-                                  ::profile/email
-                                  ::profile/password]}))))))
+             ::ui/attributes     [:conduit.profile/image
+                                  :conduit.profile/username
+                                  :conduit.profile/bio
+                                  :conduit.profile/email
+                                  :conduit.profile/password]}))))))
 
 (defsc Profile [this {:>/keys               [user-info]
                       :conduit.profile/keys [articles]}]
@@ -476,35 +470,35 @@
           (remove (comp nil? val))
           (merge profile
                  (when author
-                   {::article/author profile})
-                 {::article/title           title
-                  ::article/created-at      (new js/Date createdAt)
-                  ::article/slug            slug
-                  ::article/updated-at      updatedAt
-                  ::article/description     description
-                  ::article/favorited?      favorited
-                  ::article/favorites-count favoritesCount
-                  ::article/tag-list        (for [tag tagList]
-                                              {::tag/tag tag})
+                   {:conduit.article/author profile})
+                 {:conduit.article/title           title
+                  :conduit.article/created-at      (new js/Date createdAt)
+                  :conduit.article/slug            slug
+                  :conduit.article/updated-at      updatedAt
+                  :conduit.article/description     description
+                  :conduit.article/favorited?      favorited
+                  :conduit.article/favorites-count favoritesCount
+                  :conduit.article/tag-list        (for [tag tagList]
+                                                     {:conduit.tag/tag tag})
 
-                  ::article/body            body}))))
+                  :conduit.article/body            body}))))
 
 (def register
   [(pc/constantly-resolver
-     ::feed-toggle [{::feed-button/label "Your Feed"
-                     ::feed-button/href  (str "#/home")}
-                    {::feed-button/label "Global Feed"
-                     ::feed-button/href  (str "#/home")}])
+     ::feed-toggle [{:conduit.feed-button/label "Your Feed"
+                     :conduit.feed-button/href  (str "#/home")}
+                    {:conduit.feed-button/label "Global Feed"
+                     :conduit.feed-button/href  (str "#/home")}])
    (pc/resolver `top-routes
                 {::pc/output [::top-routes]}
                 (fn [{:keys [parser]
                       :as   env} _]
                   (async/go
-                    {::top-routes (let [{::profile/keys [username
-                                                         image]} (-> (parser env [{::my-profile [::profile/username
-                                                                                                 ::profile/image]}])
-                                                                     async/<!
-                                                                     ::my-profile)]
+                    {::top-routes (let [{:conduit.profile/keys [username
+                                                                image]} (-> (parser env [{::my-profile [:conduit.profile/username
+                                                                                                        :conduit.profile/image]}])
+                                                                            async/<!
+                                                                            ::my-profile)]
                                     (if username
                                       [{::label "Home"
                                         ::path  "#/home"}
@@ -536,9 +530,9 @@
                                                            ::method "POST"
                                                            ::body   (js/JSON.stringify body)}))
                             {:strs [errors user]} (js->clj response)
-                            {::profile/keys [token]
-                             :as            my-profile} (assoc (qualify-profile user)
-                                                          ::profile/email email)]
+                            {:conduit.profile/keys [token]
+                             :as                   my-profile} (assoc (qualify-profile user)
+                                                                 :conduit.profile/email email)]
                         (when token
                           (reset! jwt token))
                         (cond-> my-profile
@@ -562,9 +556,9 @@
                                                            ::method "POST"
                                                            ::body   (js/JSON.stringify body)}))
                             {:strs [errors user]} (js->clj response)
-                            {::profile/keys [token]
-                             :as            my-profile} (assoc (qualify-profile user)
-                                                          ::profile/email email)]
+                            {:conduit.profile/keys [token]
+                             :as                   my-profile} (assoc (qualify-profile user)
+                                                                 :conduit.profile/email email)]
                         (when token
                           (reset! jwt token))
                         (cond-> my-profile
@@ -576,48 +570,48 @@
    (pc/constantly-resolver ::waiting? false)
    (pc/resolver `article
                 {::pc/input  #{:conduit.article/slug}
-                 ::pc/output [::article/body
-                              ::profile/image
-                              ::article/created-at
-                              ::profile/username
-                              ::article/title]}
+                 ::pc/output [:conduit.article/body
+                              :conduit.profile/image
+                              :conduit.article/created-at
+                              :conduit.profile/username
+                              :conduit.article/title]}
                 (fn [ctx {:conduit.article/keys [slug]}]
                   (async/go
                     (let [result (async/<! (fetch ctx {::path (str "/articles/" slug)}))
                           {:strs [article]} (js->clj result)]
                       (qualify-article article)))))
    (pc/resolver `slug->href
-                {::pc/input  #{::article/slug}
-                 ::pc/output [::article/href]}
-                (fn [_ {::article/keys [slug]}]
-                  {::article/href (str "#/article/" slug)}))
+                {::pc/input  #{:conduit.article/slug}
+                 ::pc/output [:conduit.article/href]}
+                (fn [_ {:conduit.article/keys [slug]}]
+                  {:conduit.article/href (str "#/article/" slug)}))
    (pc/resolver `username->href
-                {::pc/input  #{::profile/username}
-                 ::pc/output [::profile/href]}
-                (fn [_ {::profile/keys [username]}]
-                  {::profile/href (str "#/profile/" username)}))
+                {::pc/input  #{:conduit.profile/username}
+                 ::pc/output [:conduit.profile/href]}
+                (fn [_ {:conduit.profile/keys [username]}]
+                  {:conduit.profile/href (str "#/profile/" username)}))
    (pc/resolver `comments
                 {::pc/input  #{:conduit.article/slug}
-                 ::pc/output [::article/comments]}
+                 ::pc/output [:conduit.article/comments]}
                 (fn [ctx {:conduit.article/keys [slug]}]
                   (async/go
                     (let [result (async/<! (fetch ctx {::path (str "/articles/" slug "/comments")}))
                           {:strs [comments]} (js->clj result)]
-                      {::article/comments (for [{:strs [id body createdAt author updatedAt]} comments
-                                                :let [profile (qualify-profile author)]]
-                                            (merge
-                                              profile
-                                              {:conduit.comment/id         id
-                                               :conduit.comment/body       body
-                                               :conduit.comment/author     author
-                                               :conduit.comment/created-at (new js/Date createdAt)
-                                               :conduit.comment/updated-at (new js/Date updatedAt)}))}))))
+                      {:conduit.article/comments (for [{:strs [id body createdAt author updatedAt]} comments
+                                                       :let [profile (qualify-profile author)]]
+                                                   (merge
+                                                     profile
+                                                     {:conduit.comment/id         id
+                                                      :conduit.comment/body       body
+                                                      :conduit.comment/author     author
+                                                      :conduit.comment/created-at (new js/Date createdAt)
+                                                      :conduit.comment/updated-at (new js/Date updatedAt)}))}))))
    (pc/resolver `current-user
                 {::pc/output [::my-profile]}
                 (fn [{::keys [jwt]
                       :as    env} _]
-                  (async/go
-                    (when @jwt
+                  (when @jwt
+                    (async/go
                       (let [result (async/<! (fetch env {::path (str "/user")}))
                             {:strs [user]} (js->clj result)]
                         {::my-profile (qualify-profile user)})))))
@@ -633,14 +627,14 @@
                       (qualify-profile profile)))))
    (pc/resolver `profile/articles
                 {::pc/input  #{:conduit.profile/username}
-                 ::pc/output [::profile/article-count
-                              ::profile/articles]}
+                 ::pc/output [:conduit.profile/article-count
+                              :conduit.profile/articles]}
                 (fn [ctx {:conduit.profile/keys [username]}]
                   (async/go
                     (let [result (async/<! (fetch ctx {::path (str "/articles?author=" username "&limit=5&offset=0")}))
                           {:strs [articles articlesCount]} (js->clj result)]
-                      {::profile/article-count articlesCount
-                       ::profile/articles      (map qualify-article articles)}))))
+                      {:conduit.profile/article-count articlesCount
+                       :conduit.profile/articles      (map qualify-article articles)}))))
 
    (pc/resolver `popular-tags
                 {::pc/output [::popular-tags]}
@@ -671,8 +665,14 @@
 (def remote
   {:transmit!               transmit!
    :parser                  parser
-   ::jwt                    (storage/atom {::storage/storage  js/localStorage
-                                           ::storage/key-name "jwt"})
+   ::jwt                    (reify
+                              IDeref
+                              (-deref [this]
+                                (.getItem js/localStorage "jwt"))
+                              IReset
+                              (-reset! [this value]
+                                (.setItem js/localStorage "jwt" value)
+                                value))
    ::api-url                "https://conduit.productionready.io/api"
    ::p/reader               [p/map-reader
                              pc/parallel-reader
@@ -680,9 +680,9 @@
                              p/env-placeholder-reader]
    ::p/placeholder-prefixes #{">"}})
 
-(defonce app (rad-app/fulcro-rad-app {:client-did-mount client-did-mount
-                                      :shared           {::history (Html5History.)}
-                                      :remotes          {:remote remote}}))
+(defonce app (app/fulcro-app {:client-did-mount client-did-mount
+                              :shared           {::history (Html5History.)}
+                              :remotes          {:remote remote}}))
 
 (def node "conduit")
 
