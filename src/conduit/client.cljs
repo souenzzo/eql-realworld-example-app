@@ -18,6 +18,8 @@
     [conduit.ui :as ui]
     [conduit.feed-button :as feed-button]
     [conduit.profile :as profile]
+    [goog.object :as gobj]
+    [conduit.local-storage :as ls]
     [edn-query-language.core :as eql]
     [goog.events :as events]
     [goog.history.EventType :as et]
@@ -39,7 +41,7 @@
 (defn push!
   [app path]
   (let [{::keys [^Html5History history]} (comp/shared app)]
-    (.setToken  history path)))
+    (.setToken history (subs path 1))))
 
 (defsc Home [this {::keys [articles
                            feed-toggle
@@ -124,39 +126,44 @@
                     ::ui/submit-label "Post Comment"})
           (map ui/ui-comment comments))))))
 
-(defsc ErrorMessage [this {:conduit.error/keys [message]}]
-  {:query [:conduit.error/message]
-   :ident :conduit.error/message}
-  (dom/li {}
+
+(defsc ErrorMessage [this {:conduit.error/keys [message hidden?]}]
+  {:query [:conduit.error/id
+           :conduit.error/hidden?
+           :conduit.error/message]
+   :ident :conduit.error/id}
+  (dom/li {:onClick #(m/set-value! this :conduit.error/hidden? true)
+           :hidden  hidden?}
           message))
 
-(def ui-error-message (comp/factory ErrorMessage {:keyfn :conduit.error/message}))
+(def ui-error-message (comp/factory ErrorMessage {:keyfn :conduit.error/id}))
 
 (defsc Redirect [this {:conduit.redirect/keys [path]}]
   {:query [:conduit.redirect/path]}
   (let [{::keys [^Html5History history]} (comp/shared this)]
-    (dom/a
-      {:href #(.setToken history path)}
-      path)))
+    (dom/button
+      {:onClick #(push! this path)}
+      (str "Redirect: '" path "'"))))
 
 (def ui-redirect (comp/factory Redirect))
 
-(declare Header)
-
-(defsc SignIn [this {:conduit.profile.login/keys [loading?
-                                                  errors
-                                                  redirect]}]
+(defsc SignIn [this {::keys [waiting?
+                             errors
+                             redirect]
+                     :as    props}]
   {:ident         (fn [] [:component/id ::sign-in])
-   :query         [:conduit.profile.login/loading?
+   :query         [::waiting?
                    :conduit.profile/username
                    :conduit.profile/email
-                   ::top-routes
-                   {:conduit.profile.login/errors (comp/get-query ErrorMessage)}
-                   {:>/header (comp/get-query Header)}
-                   {:conduit.profile.login/redirect (comp/get-query Redirect)}]
+                   {::errors (comp/get-query ErrorMessage)}
+                   {::redirect (comp/get-query Redirect)}]
+   :will-enter    (fn [app _]
+                    (dr/route-deferred [:component/id ::sign-in]
+                                       #(df/load! app [:component/id ::sign-in] SignIn
+                                                  {:post-mutation        `dr/target-ready
+                                                   :post-mutation-params {:target [:component/id ::sign-in]}})))
    :route-segment ["login"]}
   (dom/div
-
     {:className "auth-page"}
     (dom/div
       {:className "container page"}
@@ -178,15 +185,15 @@
           (when redirect
             (ui-redirect redirect))
           (ui/form
-            {::ui/on-submit    (when-not loading?
+            {::ui/on-submit    (when-not waiting?
                                  (fn [params]
                                    (comp/transact! this `[(conduit.profile/login ~params)])))
              ::ui/attributes   [::profile/email
                                 ::profile/password]
              ::ui/labels       {::profile/email    "Email"
                                 ::profile/password "Password"}
-             ::ui/submit-label (if loading?
-                                 "loading ..."
+             ::ui/submit-label (if waiting?
+                                 "Signing in ..."
                                  "Sign in")
              ::ui/types        {::profile/password "password"}}))))))
 
@@ -197,7 +204,6 @@
                    :conduit.profile/email
                    ::top-routes
                    {::errors (comp/get-query ErrorMessage)}
-                   {:>/header (comp/get-query Header)}
                    {:conduit.profile.login/redirect (comp/get-query Redirect)}]
    :route-segment ["register"]}
   (dom/div
@@ -240,7 +246,7 @@
   (action [{:keys [ref state] :as env}]
           (swap! state (fn [st]
                          (-> st
-                             (update-in ref assoc :conduit.profile.login/loading? true)))))
+                             (update-in ref assoc ::waiting? true)))))
   (remote [env]
           (-> env
               (m/returning SignIn)))
@@ -335,7 +341,7 @@
               (dom/a :.nav-link {:href ""} "Favorited Articles")))
           (for [article articles]
             (ui/ui-article-preview (comp/computed article
-                                                 {::ui/on-fav (fn [])}))))))))
+                                                  {::ui/on-fav (fn [])}))))))))
 
 (defrouter TopRouter [this {:keys [current-state]}]
   {:router-targets [Home SignIn SignUp Article NewPost Settings Profile]}
@@ -347,17 +353,10 @@
 (def ui-top-router (comp/factory TopRouter))
 
 (defsc Header [this {::keys [top-routes]}]
-  {:query         [::dr/current-route
-                   ::top-routes]
-   :ident         (fn []
-                    [::dr/id :conduit.client/TopRouter])
-   :initial-state (fn [_]
-                    {::top-routes [{::label "Home"
-                                    ::path  "#/home"}
-                                   {::label "Sign in"
-                                    ::path  "#/login"}
-                                   {::label "Sign up"
-                                    ::path  "#/register"}]})}
+  {:query [::dr/current-route
+           ::top-routes]
+   :ident (fn []
+            [::dr/id :conduit.client/TopRouter])}
   (let [current-route (dr/current-route this)]
     (dom/nav
       {:className "navbar navbar-light"}
@@ -368,7 +367,7 @@
                "conduit")
         (dom/ul
           {:className "nav navbar-nav pull-xs-right"}
-          (for [{::keys [label path]} top-routes]
+          (for [{::keys [label icon img path]} top-routes]
             (dom/li
               {:key       label
                :className "nav-item"}
@@ -376,6 +375,11 @@
                 {:href    path
                  :classes ["nav-link" (when (= current-route path)
                                         "active")]}
+                (when icon
+                  (dom/i {:className icon}))
+                (when img
+                  (dom/img {:className "user-pic"
+                            :src       img}))
                 label))))))))
 
 (def ui-header (comp/factory Header))
@@ -418,7 +422,8 @@
                                    (let [token (.-token e)
                                          path (vec (rest (string/split (first (string/split token #"\?"))
                                                                        #"/")))]
-                                     (dr/change-route! app path))))
+                                     (dr/change-route! app path)
+                                     (df/load! app :>/header Header))))
       (.setEnabled true))))
 
 (defn fetch
@@ -475,15 +480,18 @@
    (pc/resolver `top-routes
                 {::pc/output [::top-routes]}
                 (fn [{::keys [authed-user]} _]
-                  (let [username (-> @authed-user (get "username"))]
+                  (let [{:strs [username image]} @authed-user]
                     {::top-routes (if username
                                     [{::label "Home"
                                       ::path  "#/home"}
                                      {::label "New Post"
+                                      ::icon "ion-compose"
                                       ::path  "#/editor"}
                                      {::label "Settings"
+                                      ::icon "ion-gear-a"
                                       ::path  (str "#/settings/" username)}
                                      {::label username
+                                      ::img   image
                                       ::path  (str "#/profile/" username)}]
                                     [{::label "Home"
                                       ::path  "#/home"}
@@ -505,13 +513,24 @@
                                                            ::body   (js/JSON.stringify body)}))
                             {:strs [errors user]} (js->clj response)
                             {:strs [username]} user]
+                        (when-not (empty? user)
+                          (ls/set! ::authed-user (gobj/get response "user")))
                         (reset! authed-user user)
-                        {:conduit.profile/username       username
-                         :conduit.profile/email          email
-                         :conduit.profile.login/loading? false
-                         :conduit.profile.login/errors   []
-                         :conduit.profile.login/redirect (when (empty? errors)
-                                                           {:conduit.redirect/path "#/home"})})))))
+                        (cond-> {:conduit.profile/username username
+                                 :conduit.profile/email    email
+                                 ::errors                  (for [[k vs] errors
+                                                                 v vs]
+                                                             {:conduit.error/id      (str (gensym "conduit.error"))
+                                                              :conduit.error/message (str k ": " v)})}
+                                (empty? errors) (assoc ::redirect {:conduit.redirect/path "#/home"})))))))
+   (pc/constantly-resolver ::waiting? false)
+   (pc/resolver `session-image
+                {::pc/output [:conduit.session/image]}
+                (fn [{::keys [authed-user]}]
+                  (some-> authed-user
+                          deref
+                          (get "image")
+                          (->> (hash-map :conduit.session/image)))))
 
    (pc/resolver `article
                 {::pc/input  #{:conduit.article/slug}
@@ -604,7 +623,7 @@
 (def remote
   {:transmit!               transmit!
    :parser                  parser
-   ::authed-user            (atom nil)
+   ::authed-user            (atom (js->clj (ls/get ::authed-user)))
    ::api-url                "https://conduit.productionready.io/api"
    ::p/reader               [p/map-reader
                              pc/parallel-reader
