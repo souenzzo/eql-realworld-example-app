@@ -22,8 +22,7 @@
     [conduit.storage :as storage]
     [edn-query-language.core :as eql]
     [goog.events :as events]
-    [goog.history.EventType :as et]
-    [taoensso.timbre :as log])
+    [goog.history.EventType :as et])
   (:import (goog.history Html5History)))
 ;; TODO: Create a lib for "pathom remote"
 (defn transmit!
@@ -32,7 +31,6 @@
                             result-handler ast]}]
   (let [query (eql/ast->query ast)
         result (parser env query)]
-    (log/info :query query)
     (async/go
       (result-handler {:body                 (async/<! result)
                        :original-transaction ast
@@ -315,7 +313,9 @@
                                                    :post-mutation-params {:target [:conduit.profile/username username]}})))}
   (dom/div
     :.profile-page
-    (ui/ui-user-info user-info)
+    (ui/ui-user-info (comp/computed user-info
+                                    {::ui/on-follow (fn []
+                                                      (push! this "#/login"))}))
     (dom/div
       :.container
       (dom/div
@@ -349,7 +349,7 @@
   {:query [::dr/current-route
            ::top-routes]
    :ident (fn []
-            [::dr/id :conduit.client/TopRouter])}
+            [::dr/id ::TopRouter])}
   (let [current-route (dr/current-route this)]
     (dom/nav
       {:className "navbar navbar-light"}
@@ -425,7 +425,7 @@
                        :or    {method "GET"}}]
   (let [authorization (some-> authed-user
                               deref
-                              (get "token")
+                              ::profile/token
                               (->> (str "Token ")))
         headers (cond-> #js{"Content-Type" "application/json"}
                         authorization (doto (gobj/set "Authorization" authorization)))
@@ -441,6 +441,7 @@
 (defn qualify-profile
   [{:strs [bio
            following
+           token
            image
            username]}]
   (into {}
@@ -448,6 +449,7 @@
         #:conduit.profile{:bio       bio
                           :following following
                           :image     image
+                          :token     token
                           :username  username}))
 
 (defn qualify-article
@@ -480,7 +482,7 @@
    (pc/resolver `top-routes
                 {::pc/output [::top-routes]}
                 (fn [{::keys [authed-user]} _]
-                  (let [{:strs [username image]} @authed-user]
+                  (let [{::profile/keys [username image]} @authed-user]
                     {::top-routes (if username
                                     [{::label "Home"
                                       ::path  "#/home"}
@@ -489,7 +491,7 @@
                                       ::path  "#/editor"}
                                      {::label "Settings"
                                       ::icon  "ion-gear-a"
-                                      ::path  (str "#/settings/" username)}
+                                      ::path  (str "#/settings")}
                                      {::label username
                                       ::img   image
                                       ::path  (str "#/profile/" username)}]
@@ -575,10 +577,8 @@
                       :as    env} _]
                   (async/go
                     (let [result (async/<! (fetch env {::path (str "/user")}))
-                          email (some-> authed-user deref (get "email"))
                           {:strs [user]} (js->clj result)]
-                      {::my-profile (cond-> (qualify-profile user)
-                                            email (assoc ::profile/email email))}))))
+                      {::my-profile (swap! authed-user merge (qualify-profile user))}))))
    (pc/resolver `profile
                 {::pc/input  #{:conduit.profile/username}
                  ::pc/output [:conduit.profile/bio
@@ -587,11 +587,8 @@
                 (fn [ctx {:conduit.profile/keys [username]}]
                   (async/go
                     (let [result (async/<! (fetch ctx {::path (str "/profiles/" username)}))
-                          {:strs [profile]} (js->clj result)
-                          {:strs [bio image following]} profile]
-                      {:conduit.profile/bio       bio
-                       :conduit.profile/image     image
-                       :conduit.profile/following following}))))
+                          {:strs [profile]} (js->clj result)]
+                      (qualify-profile profile)))))
    (pc/resolver `profile/articles
                 {::pc/input  #{:conduit.profile/username}
                  ::pc/output [::profile/article-count

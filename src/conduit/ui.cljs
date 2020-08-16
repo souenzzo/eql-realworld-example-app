@@ -81,12 +81,12 @@
           {:key       (str attribute)
            :className "form-group"}
           (dom/input
-            {:className   "form-control form-control-lg"
-             :type        (get types attribute "text")
-             :name        (str attribute)
-             :ref (fn [])
+            {:className    "form-control form-control-lg"
+             :type         (get types attribute "text")
+             :name         (str attribute)
+             :ref          (fn [])
              :defaultValue (get default-values attribute "")
-             :placeholder (get labels attribute (name attribute))})))
+             :placeholder  (get labels attribute (name attribute))})))
       (dom/button
         {:className "btn btn-lg btn-primary pull-xs-right"
          :disabled  disabled?}
@@ -163,7 +163,7 @@
         (show-date created-at)))
     (when on-fav
       (dom/button
-        {:onClick on-fav
+        {:onClick   on-fav
          :className "btn btn-outline-primary btn-sm pull-xs-right"}
         (dom/i {:className "ion-heart"})
         favorites-count))
@@ -213,7 +213,8 @@
 
 (def ui-article-preview (comp/factory ArticlePreview {:keyfn ::article/slug}))
 
-(defsc UserInfo [this {::profile/keys [image username bio]}]
+(defsc UserInfo [this {::profile/keys [image username bio]}
+                 {::keys [on-follow]}]
   {:query [::profile/image
            ::profile/username
            ::profile/bio]
@@ -230,9 +231,11 @@
           (dom/h4 username)
           (dom/p
             bio)
-          (dom/button
-            :.btn.btn-sm.btn-outline-secondary.action-btn
-            (dom/i :.ion-plus-round)
-            (str "Follow " username)))))))
+          (when on-follow
+            (dom/button
+              {:className "btn btn-sm btn-outline-secondary action-btn"
+               :onClick   on-follow}
+              (dom/i :.ion-plus-round)
+              (str "Follow " username))))))))
 
 (def ui-user-info (comp/factory UserInfo {:keyfn ::profile/username}))
