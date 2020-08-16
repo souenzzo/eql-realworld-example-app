@@ -3,7 +3,7 @@
   "display": "minimal-ui",
   "short_name": "Conduit",
   "theme_color": "#5cb85c",
-  "start_url": "https://souenzzo.com.br/eql-realworld-example-app/#/home",
+  "start_url": "https://souenzzo.com.br/eql-realworld-example-app/",
   "background_color": "#ffffff",
   "manifest_version": 2,
   "version": "1"
