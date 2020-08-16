@@ -328,10 +328,10 @@
               :.nav.nav-pills.outline-active
               (dom/li
                 :.nav-item
-                (dom/a :.nav-link.active {:href ""} "My Articles"))
+                (dom/a :.nav-link.active {:href "#"} "My Articles"))
               (dom/li
-                :.nav-item)
-              (dom/a :.nav-link {:href ""} "Favorited Articles")))
+                :.nav-item
+                (dom/a :.nav-link {} "Favorited Articles"))))
           (for [article articles]
             (ui/ui-article-preview (comp/computed article
                                                   {::ui/on-fav (fn [])}))))))))
@@ -512,15 +512,15 @@
                                                            ::method "POST"
                                                            ::body   (js/JSON.stringify body)}))
                             {:strs [errors user]} (js->clj response)
-                            {:strs [username]} user]
+                            my-profile (assoc (qualify-profile user)
+                                         ::profile/email email)]
                         (when-not (empty? user)
-                          (reset! authed-user (assoc user "email" email)))
-                        (cond-> {:conduit.profile/username username
-                                 :conduit.profile/email    email
-                                 ::errors                  (for [[k vs] errors
-                                                                 v vs]
-                                                             {:conduit.error/id      (str (gensym "conduit.error"))
-                                                              :conduit.error/message (str k ": " v)})}
+                          (reset! authed-user my-profile))
+                        (cond-> my-profile
+                                errors (assoc ::errors (for [[k vs] errors
+                                                             v vs]
+                                                         {:conduit.error/id      (str (gensym "conduit.error"))
+                                                          :conduit.error/message (str k ": " v)}))
                                 (empty? errors) (assoc ::redirect {:conduit.redirect/path "#/home"})))))))
    (pc/constantly-resolver ::waiting? false)
    (pc/resolver `session-image
