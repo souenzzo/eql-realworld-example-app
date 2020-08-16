@@ -62,6 +62,7 @@
   [{::keys [attributes
             on-submit
             submit-label
+            default-values
             types
             labels]}]
   (let [disabled? (not on-submit)]
@@ -83,6 +84,8 @@
             {:className   "form-control form-control-lg"
              :type        (get types attribute "text")
              :name        (str attribute)
+             :ref (fn [])
+             :defaultValue (get default-values attribute "")
              :placeholder (get labels attribute (name attribute))})))
       (dom/button
         {:className "btn btn-lg btn-primary pull-xs-right"

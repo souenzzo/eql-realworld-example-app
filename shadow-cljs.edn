@@ -4,14 +4,16 @@
                         :output-dir       "target/conduit"
                         :asset-path       "/conduit"
                         :modules          {:main {:init-fn conduit.client/init-fn}}
-                        :compiler-options {:source-map true}
+                        :compiler-options {:source-map      true
+                                           :external-config {:fulcro {:wrap-inputs? false}}}
                         :devtools         {:preloads   [conduit.dev]
                                            :after-load conduit.dev/after-load}}
             :workspace {:target           :browser
                         :output-dir       "target/workspace"
                         :asset-path       "/workspace"
                         :modules          {:main {:init-fn conduit.workspace/init-fn}}
-                        :compiler-options {:source-map true}
+                        :compiler-options {:source-map      true
+                                           :external-config {:fulcro {:wrap-inputs? false}}}
                         :devtools         {:preloads   [conduit.dev
                                                         conduit.workspace]
                                            :after-load nubank.workspaces.core/after-load}}}}

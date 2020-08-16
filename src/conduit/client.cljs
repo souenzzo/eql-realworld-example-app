@@ -151,17 +151,17 @@
                              errors
                              redirect]
                      :as    props}]
-  {:ident         (fn [] [:component/id ::sign-in])
+  {:ident         (fn [] [::session ::my-profile])
    :query         [::waiting?
                    :conduit.profile/username
                    :conduit.profile/email
                    {::errors (comp/get-query ErrorMessage)}
                    {::redirect (comp/get-query Redirect)}]
    :will-enter    (fn [app _]
-                    (dr/route-deferred [:component/id ::sign-in]
-                                       #(df/load! app [:component/id ::sign-in] SignIn
+                    (dr/route-deferred [::session ::my-profile]
+                                       #(df/load! app [::session ::my-profile] SignIn
                                                   {:post-mutation        `dr/target-ready
-                                                   :post-mutation-params {:target [:component/id ::sign-in]}})))
+                                                   :post-mutation-params {:target [::session ::my-profile]}})))
    :route-segment ["login"]}
   (dom/div
     {:className "auth-page"}
@@ -249,17 +249,7 @@
                              (update-in ref assoc ::waiting? true)))))
   (remote [env]
           (-> env
-              (m/returning SignIn)))
-  (ok-action [{:keys [state result]}]
-             (swap! state (fn [st]
-                            (-> st
-                                (assoc-in [:component/id
-                                           ::settings
-                                           ::me]
-                                          (-> result
-                                              :body
-                                              (get `conduit.profile/login)
-                                              (find :conduit.profile/username))))))))
+              (m/returning SignIn))))
 
 (defsc NewPost [this props]
   {:ident         (fn []
@@ -280,18 +270,19 @@
                               ::article/body
                               ::article/tags]}))))))
 
-(defsc Settings [this {:conduit.profile/keys [image username bio email]}]
-  {:ident         :conduit.profile/username
+(defsc Settings [this {:conduit.profile/keys [image username bio email]
+                       :as                   props}]
+  {:ident         (fn [] [::session ::my-profile])
    :query         [:conduit.profile/bio
                    :conduit.profile/username
                    :conduit.profile/email
                    :conduit.profile/image]
-   :route-segment ["settings" :conduit.profile/username]
-   :will-enter    (fn [app {:conduit.profile/keys [username]}]
-                    (dr/route-deferred [:conduit.profile/username username]
-                                       #(df/load! app [:conduit.profile/username username] Settings
+   :route-segment ["settings"]
+   :will-enter    (fn [app _]
+                    (dr/route-deferred [::session ::my-profile]
+                                       #(df/load! app ::my-profile Settings
                                                   {:post-mutation        `dr/target-ready
-                                                   :post-mutation-params {:target [:conduit.profile/username username]}})))}
+                                                   :post-mutation-params {:target [::session ::my-profile]}})))}
   (dom/div
     :.settings-page
     (dom/div
@@ -300,13 +291,15 @@
         :.row
         (dom/div
           :.col-md-6.offset-md-3.col-xs-12
-          (dom/h1 :.text-xs-center "Your Settings")
+          (dom/h1 :.text-xs-center
+                  "Your Settings")
           (ui/form
-            {::ui/attributes [::profile/image
-                              ::profile/username
-                              ::profile/bio
-                              ::profile/email
-                              ::profile/password]}))))))
+            {::ui/default-values props
+             ::ui/attributes     [::profile/image
+                                  ::profile/username
+                                  ::profile/bio
+                                  ::profile/email
+                                  ::profile/password]}))))))
 
 (defsc Profile [this {:>/keys               [user-info]
                       :conduit.profile/keys [articles]}]
@@ -427,11 +420,18 @@
       (.setEnabled true))))
 
 (defn fetch
-  [{::keys [api-url]} {::keys [path method body]}]
-  (let [opts (when body
-               #js {:method  method
-                    :headers #js{"Content-Type" "application/json"}
-                    :body    body})]
+  [{::keys [authed-user
+            api-url]} {::keys [path method body]
+                       :or    {method "GET"}}]
+  (let [authorization (some-> authed-user
+                              deref
+                              (get "token")
+                              (->> (str "Token ")))
+        headers (cond-> #js{"Content-Type" "application/json"}
+                        authorization (doto (gobj/set "Authorization" authorization)))
+        opts (cond-> #js{:method  method
+                         :headers headers}
+                     body (doto (gobj/set "body" body)))]
     (async/go
       (-> (js/fetch (str api-url path) opts)
           <p!
@@ -485,10 +485,10 @@
                                     [{::label "Home"
                                       ::path  "#/home"}
                                      {::label "New Post"
-                                      ::icon "ion-compose"
+                                      ::icon  "ion-compose"
                                       ::path  "#/editor"}
                                      {::label "Settings"
-                                      ::icon "ion-gear-a"
+                                      ::icon  "ion-gear-a"
                                       ::path  (str "#/settings/" username)}
                                      {::label username
                                       ::img   image
@@ -514,8 +514,9 @@
                             {:strs [errors user]} (js->clj response)
                             {:strs [username]} user]
                         (when-not (empty? user)
-                          (ls/set! ::authed-user (gobj/get response "user")))
-                        (reset! authed-user user)
+                          (ls/set! ::authed-user (doto (gobj/get response "user")
+                                                   (gobj/set "email" email)))
+                          (reset! authed-user (assoc user "email" email)))
                         (cond-> {:conduit.profile/username username
                                  :conduit.profile/email    email
                                  ::errors                  (for [[k vs] errors
@@ -570,6 +571,16 @@
                                                :conduit.comment/author     author
                                                :conduit.comment/created-at (new js/Date createdAt)
                                                :conduit.comment/updated-at (new js/Date updatedAt)}))}))))
+   (pc/resolver `current-user
+                {::pc/output [::my-profile]}
+                (fn [{::keys [authed-user]
+                      :as    env} _]
+                  (async/go
+                    (let [result (async/<! (fetch env {::path (str "/user")}))
+                          email (some-> authed-user deref (get "email"))
+                          {:strs [user]} (js->clj result)]
+                      {::my-profile (cond-> (qualify-profile user)
+                                            email (assoc ::profile/email email))}))))
    (pc/resolver `profile
                 {::pc/input  #{:conduit.profile/username}
                  ::pc/output [:conduit.profile/bio
