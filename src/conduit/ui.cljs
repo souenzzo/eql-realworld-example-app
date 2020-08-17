@@ -20,7 +20,6 @@
                                              :day     "numeric"
                                              :year    "numeric"})))
 
-
 (defsc TagPillOutline [this {:conduit.tag/keys [tag href]}]
   {:query [:conduit.tag/tag
            :conduit.tag/href]
@@ -59,7 +58,8 @@
             on-submit
             submit-label
             default-values
-            types
+            types large
+            multiline
             labels]}]
   (let [disabled? (not on-submit)]
     (dom/form
@@ -72,17 +72,21 @@
                                                [attribute (.-value (gobj/get form (str attribute)))]))
                                         attributes)]
                        (on-submit params))))}
-      (for [attribute attributes]
+      (for [attribute attributes
+            :let [attrs {:className    (if (contains? large attribute)
+                                         "form-control form-control-lg"
+                                         "form-control")
+                         :name         (str attribute)
+                         :defaultValue (get default-values attribute "")
+                         :placeholder  (get labels attribute (name attribute))}]]
         (dom/fieldset
           {:key       (str attribute)
            :className "form-group"}
-          (dom/input
-            {:className    "form-control form-control-lg"
-             :type         (get types attribute "text")
-             :name         (str attribute)
-             :ref          (fn [])
-             :defaultValue (get default-values attribute "")
-             :placeholder  (get labels attribute (name attribute))})))
+          (if (contains? multiline attribute)
+            (dom/textarea
+              (assoc attrs :rows 8))
+            (dom/input
+              (assoc attrs :type (get types attribute "text"))))))
       (dom/button
         {:className "btn btn-lg btn-primary pull-xs-right"
          :disabled  disabled?}
@@ -133,6 +137,7 @@
 
 (defsc ArticleMeta [this {:conduit.profile/keys [href image username]
                           :conduit.article/keys [created-at
+                                                 favorited?
                                                  favorites-count]}
                     {::keys [on-favorite
                              on-fav
@@ -141,6 +146,7 @@
            :conduit.profile/image
            :conduit.profile/username
            :conduit.article/created-at
+           :conduit.article/favorited?
            :conduit.article/favorites-count
            :conduit.article/slug]
    :ident :conduit.article/slug}
@@ -163,7 +169,9 @@
     (when on-fav
       (dom/button
         {:onClick   on-fav
-         :className "btn btn-outline-primary btn-sm pull-xs-right"}
+         :className (if favorited?
+                      "btn btn-sm btn-primary pull-xs-right"
+                      "btn btn-outline-primary btn-sm pull-xs-right")}
         (dom/i {:className "ion-heart"})
         favorites-count))
     (when on-flow
@@ -229,8 +237,8 @@
           (dom/img :.user-img {:alt (str "profile of " username)
                                :src image})
           (dom/h4 username)
-          (dom/p
-            bio)
+          (dom/section
+            (markdown bio))
           (when on-follow
             (dom/button
               {:className "btn btn-sm btn-outline-secondary action-btn"

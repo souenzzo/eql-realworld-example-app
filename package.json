@@ -6,6 +6,8 @@
   },
   "devDependencies": {
     "highlight.js": "10.1.2",
-    "react-grid-layout": "1.0.0"
+    "react-grid-layout": "1.0.0",
+    "react-icons": "3.10.0",
+    "reakit": "1.2.1"
   }
 }

@@ -113,8 +113,21 @@
         :.row
         (dom/div
           :.col-xs-12.col-md-8.offset-md-2
-          (ui/form {::ui/attributes   [:conduit.comment/body]
-                    ::ui/submit-label "Post Comment"})
+          (dom/form
+            {:className "card comment-form"}
+            (dom/div
+              {:className "card-block"}
+              (dom/textarea
+                {:className   "form-control"
+                 :placeholder "Write a comment ..."
+                 :rows        3})
+              (dom/div
+                {:className "card-footer"}
+                (dom/img {:src "" #_my-image
+                          :alt "my profile image"})
+                (dom/button
+                  {:className "btn btn-sm btn-primary"}
+                  "Post Comment"))))
           (map ui/ui-comment comments))))))
 
 (defsc Redirect [this {:conduit.redirect/keys [path]}]
@@ -267,13 +280,21 @@
         (dom/div
           :.col-md-10.offset-md-1.col-xs-12
           (ui/form
-            {::ui/attributes [:conduit.article/title
-                              :conduit.article/description
-                              :conduit.article/body
-                              :conduit.article/tags]}))))))
+            {::ui/attributes   [:conduit.article/title
+                                :conduit.article/description
+                                :conduit.article/body
+                                :conduit.article/tags]
+             ::ui/multiline    #{:conduit.article/body}
+             ::ui/large        #{:conduit.article/title}
+             ::ui/labels       {:conduit.article/title       "Article Title"
+                                :conduit.article/description "What's this article about?"
+                                :conduit.article/body        "Write your article (in markdown)"
+                                :conduit.article/tags        "Enter tags"}
+             ::ui/on-submit    (fn [params]
+                                 (prn params))
+             ::ui/submit-label "Publish Article"}))))))
 
-(defsc Settings [this {:conduit.profile/keys [image username bio email]
-                       :as                   props}]
+(defsc Settings [this props]
   {:ident         (fn [] [::session ::my-profile])
    :query         [:conduit.profile/bio
                    :conduit.profile/username
@@ -297,15 +318,66 @@
                   "Your Settings")
           (ui/form
             {::ui/default-values props
+             ::ui/on-submit      (fn [props]
+                                   (prn props))
+             ::ui/large          #{:conduit.profile/username
+                                   :conduit.profile/email
+                                   :conduit.profile/bio
+                                   :conduit.profile/password}
+             ::ui/multiline      #{:conduit.profile/bio}
              ::ui/attributes     [:conduit.profile/image
                                   :conduit.profile/username
                                   :conduit.profile/bio
                                   :conduit.profile/email
-                                  :conduit.profile/password]}))))))
+                                  :conduit.profile/password]
+             ::ui/submit-label   "Update Settings"}))))))
+
+(defsc ProfileFavorites [this {:>/keys               [user-info]
+                               :conduit.profile/keys [favorites-articles me?]}]
+  {:query         [:conduit.profile/username
+                   :conduit.profile/me?
+                   {:>/user-info (comp/get-query ui/UserInfo)}
+                   {:conduit.profile/favorites-articles (comp/get-query ui/ArticlePreview)}]
+   :ident         :conduit.profile/username
+   :route-segment ["profile" :conduit.profile/username "favorites"]
+   :will-enter    (fn [app {:conduit.profile/keys [username]}]
+                    (dr/route-deferred [:conduit.profile/username username]
+                                       #(df/load! app [:conduit.profile/username username] ProfileFavorites
+                                                  {:post-mutation        `dr/target-ready
+                                                   :post-mutation-params {:target [:conduit.profile/username username]}})))}
+  (dom/div
+    :.profile-page
+    (ui/ui-user-info (comp/computed user-info
+                                    (if me?
+                                      {::ui/on-edit (fn []
+                                                      (push! this "#/settings"))}
+                                      {::ui/on-follow (fn []
+                                                        (push! this "#/login"))})))
+    (dom/div
+      :.container
+      (dom/div
+        :.row
+        (dom/div
+          :.col-xs-12.col-md-10.offset-md-1
+          (dom/div
+            :.articles-toggle
+            (dom/ul
+              :.nav.nav-pills.outline-active
+              (dom/li
+                :.nav-item
+                (dom/a :.nav-link.active {:href "#"} "My Articles"))
+              (dom/li
+                :.nav-item
+                (dom/a :.nav-link {} "Favorited Articles"))))
+          (for [article favorites-articles]
+            (ui/ui-article-preview (comp/computed article
+                                                  {::ui/on-fav (fn [])}))))))))
+
 
 (defsc Profile [this {:>/keys               [user-info]
-                      :conduit.profile/keys [articles]}]
+                      :conduit.profile/keys [articles me?]}]
   {:query         [:conduit.profile/username
+                   :conduit.profile/me?
                    {:>/user-info (comp/get-query ui/UserInfo)}
                    {:conduit.profile/articles (comp/get-query ui/ArticlePreview)}]
    :ident         :conduit.profile/username
@@ -318,8 +390,11 @@
   (dom/div
     :.profile-page
     (ui/ui-user-info (comp/computed user-info
-                                    {::ui/on-follow (fn []
-                                                      (push! this "#/login"))}))
+                                    (if me?
+                                      {::ui/on-edit (fn []
+                                                      (push! this "#/settings"))}
+                                      {::ui/on-follow (fn []
+                                                        (push! this "#/login"))})))
     (dom/div
       :.container
       (dom/div
@@ -341,7 +416,7 @@
                                                   {::ui/on-fav (fn [])}))))))))
 
 (defrouter TopRouter [this {:keys [current-state]}]
-  {:router-targets [Home SignIn SignUp Article NewPost Settings Profile]}
+  {:router-targets [Home SignIn ProfileFavorites SignUp Article NewPost Settings Profile]}
   (case current-state
     :pending (dom/div "Loading...")
     :failed (dom/div "Loading seems to have failed. Try another route.")
@@ -614,7 +689,8 @@
                     (async/go
                       (let [result (async/<! (fetch env {::path (str "/user")}))
                             {:strs [user]} (js->clj result)]
-                        {::my-profile (qualify-profile user)})))))
+                        {::my-profile (assoc (qualify-profile user)
+                                        :conduit.profile/me? true)})))))
    (pc/resolver `profile
                 {::pc/input  #{:conduit.profile/username}
                  ::pc/output [:conduit.profile/bio
@@ -635,6 +711,13 @@
                           {:strs [articles articlesCount]} (js->clj result)]
                       {:conduit.profile/article-count articlesCount
                        :conduit.profile/articles      (map qualify-article articles)}))))
+   (pc/resolver `fav-articles
+                {::pc/input  #{:conduit.profile/articles}
+                 ::pc/output [:conduit.profile/favorites-articles]}
+                (fn [_ {:conduit.profile/keys [articles]}]
+                  (let [favs (filter :conduit.article/favorited? articles)]
+                    {:conduit.profile/favorites-articles       favs
+                     :conduit.profile/favorites-articles-count (count favs)})))
 
    (pc/resolver `popular-tags
                 {::pc/output [::popular-tags]}
