@@ -10,7 +10,7 @@
 
 (defn markdown
   [s]
-  (.-tree (markdown-impl s)))
+  (.-tree (markdown-impl (str s))))
 
 (defn show-date
   [x]
