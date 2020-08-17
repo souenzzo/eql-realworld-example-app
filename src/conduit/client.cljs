@@ -130,20 +130,10 @@
                   "Post Comment"))))
           (map ui/ui-comment comments))))))
 
-(defsc Redirect [this {:conduit.redirect/keys [path]}]
-  {:query [:conduit.redirect/path]}
-  (let [{::keys [^Html5History history]} (comp/shared this)]
-    (dom/button
-      {:onClick #(push! this path)}
-      (str "Redirect: '" path "'"))))
-
-(def ui-redirect (comp/factory Redirect))
-
-(defsc SignIn [this {::keys [waiting? errors redirect]}]
+(defsc SignIn [this {::keys [waiting? errors]}]
   {:ident         (fn [] [::session ::my-profile])
    :query         [::waiting?
-                   {::errors (comp/get-query ui/ErrorMessage)}
-                   {::redirect (comp/get-query Redirect)}]
+                   {::errors (comp/get-query ui/ErrorMessage)}]
    :will-enter    (fn [app _]
                     (dr/route-deferred [::session ::my-profile]
                                        #(df/load! app [::session ::my-profile] SignIn
@@ -174,8 +164,6 @@
                                                   ::errors (remove #{error} errors)))]]
               (ui/ui-error-message (comp/computed error
                                                   {::ui/on-remove on-remove}))))
-          (when redirect
-            (ui-redirect redirect))
           (ui/form
             {::ui/on-submit    (when-not waiting?
                                  (fn [params]
@@ -184,28 +172,17 @@
                                 :conduit.profile/password]
              ::ui/labels       {:conduit.profile/email    "Email"
                                 :conduit.profile/password "Password"}
+             ::ui/large        #{:conduit.profile/email
+                                 :conduit.profile/password}
              ::ui/submit-label (if waiting?
                                  "Signing in ..."
                                  "Sign in")
              ::ui/types        {:conduit.profile/password "password"}}))))))
 
-(m/defmutation conduit.profile/login
-  [{:conduit.profile/keys [email password]}]
-  (action [{:keys [ref state] :as env}]
-          (swap! state (fn [st]
-                         (-> st
-                             (update-in ref assoc
-                                        ::errors []
-                                        ::waiting? true)))))
-  (remote [env]
-          (-> env
-              (m/returning SignIn))))
-
-(defsc SignUp [this {::keys [waiting? errors redirect]}]
+(defsc SignUp [this {::keys [waiting? errors]}]
   {:ident         (fn [] [::session ::my-profile])
    :query         [::waiting?
-                   {::errors (comp/get-query ui/ErrorMessage)}
-                   {::redirect (comp/get-query Redirect)}]
+                   {::errors (comp/get-query ui/ErrorMessage)}]
    :will-enter    (fn [app _]
                     (dr/route-deferred [::session ::my-profile]
                                        #(df/load! app [::session ::my-profile] SignUp
@@ -236,8 +213,6 @@
                                                   ::errors (remove #{error} errors)))]]
               (ui/ui-error-message (comp/computed error
                                                   {::ui/on-remove on-remove}))))
-          (when redirect
-            (ui-redirect redirect))
           (ui/form
             {::ui/on-submit    (when-not waiting?
                                  (fn [params]
@@ -248,23 +223,13 @@
              ::ui/labels       {:conduit.profile/username "Your Name"
                                 :conduit.profile/email    "Email"
                                 :conduit.profile/password "Password"}
+             ::ui/large        #{:conduit.profile/email
+                                 :conduit.profile/username
+                                 :conduit.profile/password}
              ::ui/submit-label (if waiting?
                                  "Signing up ..."
                                  "Sign up")
              ::ui/types        {:conduit.profile/password "password"}}))))))
-
-(m/defmutation conduit.profile/register
-  [{:conduit.profile/keys [email password]}]
-  (action [{:keys [ref state] :as env}]
-          (swap! state (fn [st]
-                         (-> st
-                             (update-in ref assoc
-                                        ::errors []
-                                        ::waiting? true)))))
-  (remote [env]
-          (-> env
-              (m/returning SignIn))))
-
 
 (defsc NewPost [this props]
   {:ident         (fn []
@@ -424,9 +389,11 @@
 
 (def ui-top-router (comp/factory TopRouter))
 
-(defsc Header [this {::keys [top-routes]}]
+(defsc Header [this {:conduit.redirect/keys [path]
+                     ::keys                 [top-routes]}]
   {:query [::dr/current-route
-           ::top-routes]
+           ::top-routes
+           :conduit.redirect/path]
    :ident (fn []
             [::dr/id ::TopRouter])}
   (let [current-route (dr/current-route this)]
@@ -437,6 +404,10 @@
         (dom/a {:className "navbar-brand"
                 :href      "#/home"}
                "conduit")
+        (when path
+          (dom/button
+            {:onClick #(push! this path)}
+            (str "Redirect: '" path "'")))
         (dom/ul
           {:className "nav navbar-nav pull-xs-right"}
           (for [{::keys [label icon img path]} top-routes]
@@ -490,6 +461,36 @@
     (ui-header header)
     (ui-top-router router)
     (ui-footer footer)))
+
+(defsc AuthReturn [_ _]
+  {:query [{:>/header (comp/get-query Header)}
+           {:>/sign-in (comp/get-query SignIn)}
+           {:>/sign-up (comp/get-query SignUp)}]})
+
+(m/defmutation conduit.profile/register
+  [{:conduit.profile/keys [email password]}]
+  (action [{:keys [ref state] :as env}]
+          (swap! state (fn [st]
+                         (-> st
+                             (update-in ref assoc
+                                        ::errors []
+                                        ::waiting? true)))))
+  (remote [env]
+          (-> env
+              (m/returning AuthReturn))))
+
+(m/defmutation conduit.profile/login
+  [{:conduit.profile/keys [email password]}]
+  (action [{:keys [ref state] :as env}]
+          (swap! state (fn [st]
+                         (-> st
+                             (update-in ref assoc
+                                        ::errors []
+                                        ::waiting? true)))))
+  (remote [env]
+          (-> env
+              (m/returning AuthReturn))))
+
 
 (defn client-did-mount
   "Must be used as :client-did-mount parameter of app creation, or called just after you mount the app."
@@ -615,7 +616,8 @@
                                                              v vs]
                                                          {:conduit.error/id      (str (gensym "conduit.error"))
                                                           :conduit.error/message (str k ": " v)}))
-                                (empty? errors) (assoc ::redirect {:conduit.redirect/path "#/home"})))))))
+                                (empty? errors) (assoc :conduit.redirect/path "#/home")))))))
+   #_(pc/constantly-resolver :conduit.redirect/path nil)
    (pc/mutation `conduit.profile/register
                 {::pc/params [:conduit.profile/password
                               :conduit.profile/email
@@ -641,7 +643,7 @@
                                                              v vs]
                                                          {:conduit.error/id      (str (gensym "conduit.error"))
                                                           :conduit.error/message (str k ": " v)}))
-                                (empty? errors) (assoc ::redirect {:conduit.redirect/path "#/home"})))))))
+                                (empty? errors) (assoc :conduit.redirect/path "#/home")))))))
    (pc/constantly-resolver ::waiting? false)
    (pc/resolver `article
                 {::pc/input  #{:conduit.article/slug}
