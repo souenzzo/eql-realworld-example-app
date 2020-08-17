@@ -13,7 +13,9 @@ dev:
 
 target/conduit/main.js: node_modules
 	clojure -A:shadow-cljs release conduit --config-merge "{:closure-defines {conduit.client/VERSION \"$(VERSION)\"}}"
+	clojure -A:shadow-cljs run shadow.cljs.build-report conduit gh-pages/conduit-report.html
 	clojure -A:dev:shadow-cljs release workspace
+	clojure -A:dev:shadow-cljs run shadow.cljs.build-report workspace gh-pages/workspace-report.html
 
 node_modules:
 	npm install
