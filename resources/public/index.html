@@ -13,11 +13,8 @@
     <!-- Import the custom Bootstrap 4 theme from our hosted CDN -->
     <link rel="stylesheet" href="//demo.productionready.io/main.css">
 </head>
-<body>
+<body onload="conduit.client.main('conduit')">
 <div id="conduit"></div>
-<script>
-    fulcro_network_csrf_token = "";
-</script>
 <script src="/conduit/main.js">
 </script>
 </body>

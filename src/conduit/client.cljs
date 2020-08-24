@@ -765,12 +765,11 @@
                              p/env-placeholder-reader]
    ::p/placeholder-prefixes #{">"}})
 
-(defonce app (app/fulcro-app {:client-did-mount client-did-mount
-                              :shared           {::history (Html5History.)}
-                              :remotes          {:remote remote}}))
+(defonce app
+         (delay (app/fulcro-app {:client-did-mount client-did-mount
+                                 :shared           {::history (Html5History.)}
+                                 :remotes          {:remote remote}})))
 
-(def node "conduit")
-
-(defn ^:export init-fn
-  []
-  (app/mount! app Root node))
+(defn ^:export main
+  [node]
+  (app/mount! @app Root node))

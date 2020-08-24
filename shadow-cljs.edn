@@ -3,7 +3,7 @@
  :builds   {:conduit   {:target           :browser
                         :output-dir       "target/conduit"
                         :asset-path       "/conduit"
-                        :modules          {:main {:init-fn conduit.client/init-fn}}
+                        :modules          {:main {:entries [conduit.client]}}
                         :compiler-options {:source-map      true
                                            :external-config {:fulcro {:wrap-inputs? false}}}
                         :devtools         {:preloads   [conduit.dev]
