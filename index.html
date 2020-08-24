@@ -23,12 +23,8 @@
     <meta name="theme-color" content="#5cb85c"/>
     <link rel="manifest" href="manifest.webmanifest"/>
 </head>
-<body>
+<body onload="conduit.client.main('conduit')">
 <div id="conduit"></div>
-<script>
-    fulcro_network_csrf_token = "";
-
-</script>
 <script src="/eql-realworld-example-app/conduit/main.js">
 </script>
 </body>
