@@ -1,11 +1,14 @@
 (ns conduit.client-root
   (:require [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
             [com.fulcrologic.fulcro.data-fetch :as df]
+            [goog.events :as events]
+            [goog.history.EventType :as et]
             [com.fulcrologic.fulcro.dom :as dom]
             [com.fulcrologic.fulcro.mutations :as m]
             [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
-            [conduit.ui :as ui])
-  (:import (goog.history Html5History)))
+            [conduit.ui :as ui]
+            [clojure.string :as string])
+  (:import (goog.history Html5History Event)))
 
 (defn push!
   [app path]
@@ -470,3 +473,15 @@
               (m/returning AuthReturn))))
 
 
+(defn client-did-mount
+  "Must be used as :client-did-mount parameter of app creation, or called just after you mount the app."
+  [app]
+  (let [{::keys [history]} (comp/shared app)]
+    (doto history
+      (events/listen et/NAVIGATE (fn [^Event e]
+                                   (let [token (.-token e)
+                                         path (vec (rest (string/split (first (string/split token #"\?"))
+                                                                       #"/")))]
+                                     (dr/change-route! app path)
+                                     (df/load! app :>/header Header))))
+      (.setEnabled true))))

@@ -1,32 +1,13 @@
 (ns conduit.client
   (:require [conduit.client-root :as cr]
-            [com.fulcrologic.fulcro.components :as comp]
-            [clojure.string :as string]
             [com.fulcrologic.fulcro.algorithms.tx-processing :as ftx]
             [com.wsscode.pathom.connect :as pc]
             [com.wsscode.pathom.core :as p]
-            [goog.events :as events]
             [conduit.register :as register]
-            [goog.history.EventType :as et]
-            [com.fulcrologic.fulcro.data-fetch :as df]
-            [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
             [clojure.core.async :as async]
             [com.fulcrologic.fulcro.application :as app]
             [edn-query-language.core :as eql])
   (:import (goog.history Html5History Event)))
-
-(defn client-did-mount
-  "Must be used as :client-did-mount parameter of app creation, or called just after you mount the app."
-  [app]
-  (let [{::cr/keys [history]} (comp/shared app)]
-    (doto history
-      (events/listen et/NAVIGATE (fn [^Event e]
-                                   (let [token (.-token e)
-                                         path (vec (rest (string/split (first (string/split token #"\?"))
-                                                                       #"/")))]
-                                     (dr/change-route! app path)
-                                     (df/load! app :>/header cr/Header))))
-      (.setEnabled true))))
 
 ;; TODO: Create a lib for "pathom remote"
 (defn transmit!
@@ -63,7 +44,7 @@
    ::p/placeholder-prefixes #{">"}})
 
 (defonce app
-         (delay (app/fulcro-app {:client-did-mount client-did-mount
+         (delay (app/fulcro-app {:client-did-mount cr/client-did-mount
                                  :shared           {::cr/history (Html5History.)}
                                  :remotes          {:remote remote}})))
 
