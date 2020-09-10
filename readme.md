@@ -15,7 +15,34 @@ For more information on how to this works with other frontends/backends, head ov
 
 # How it works
 
-> Describe the general architecture of your app here
+It will work in many ways:
+
+## spa
+
+> /spa
+
+- `fulcro` will use `pathom` as `remote`. `connect` resolvers will call `conduit` api from browser.
+
+## spa + proxy
+
+> /spa_proxy
+
+- `fulcro` will use the standard `http` as `remote` and `pathom` will run on server, calling the same `connect` resolvers, requesting `conduit` api from server.  
+
+## ssr (TBD)
+
+- `fulcro` will render on JVM, without any JS. Will use pathom as proxy
+
+## ssr_hybid (TBD)
+
+- `fulcro` will render on JVM and the client will `hydrate`. Will operate as spa + proxy
+
+## spa + SQL (TBD)
+
+## spa + CRUX (memory) (TBD)
+
+## spa + Datascript (memory) (TBD)
+
 
 # Getting started
 
