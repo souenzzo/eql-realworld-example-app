@@ -1,4 +1,5 @@
 {:deps     true
+ ;; :dev-http {8000 ["classpath:public" "target"]}
  :builds   {:conduit   {:target           :browser
                         :output-dir       "target/conduit"
                         :asset-path       "/conduit"

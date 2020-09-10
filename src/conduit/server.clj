@@ -4,9 +4,12 @@
             [cognitect.transit :as t]
             [com.wsscode.pathom.core :as p]
             [conduit.register :as register]
+            [com.wsscode.pathom.diplomat.http :as pd.http]
+            [com.wsscode.pathom.diplomat.http.clj-http :as pd.clj-http]
             [com.wsscode.pathom.connect :as pc]
             [ring.util.mime-type :as mime]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [clojure.core.async :as async]))
 
 (defn index
   [req]
@@ -15,9 +18,11 @@
                    [:meta {:charset "utf-8"}]
                    [:title "Conduit"]
                    [:link {:href "data:image/svg+xml" :rel "icon"}]
-                   [:link {:href      "//code.ionicframework.com/ionicons/2.0.1/css/ionicons.min.css"
-                           :rel       "stylesheet"
-                           :integrity "sha384-4r9SMzlCiUSd92w9v1wROFY7DlBc5sDYaEBhcCJR7Pm2nuzIIGKVRtYWlf6w+GG4" :crossorigin "anonymous" :type "text/css"}]
+                   [:link {:href        "//code.ionicframework.com/ionicons/2.0.1/css/ionicons.min.css"
+                           :rel         "stylesheet"
+                           :integrity   "sha384-4r9SMzlCiUSd92w9v1wROFY7DlBc5sDYaEBhcCJR7Pm2nuzIIGKVRtYWlf6w+GG4"
+                           :crossorigin "anonymous"
+                           :type        "text/css"}]
                    [:link {:href        "//fonts.googleapis.com/css?family=Titillium+Web:700|Source+Serif+Pro:400,700|Merriweather+Sans:400,700|Source+Sans+Pro:400,300,600,700,300italic,400italic,600italic,700italic"
                            :rel         "stylesheet"
                            :integrity   "sha384-PBaIOeCGdwYMJUREr7Et2jvAaCoHZUczrSKwxG4QG+w6F/I9mUf2nKd66wwCfVyX"
@@ -54,21 +59,20 @@
   (p/parallel-parser
     {::p/plugins [(pc/connect-plugin {::pc/register register/register})
                   p/elide-special-outputs-plugin]
-     ::p/env     {::p/reader               [p/map-reader
-                                            pc/parallel-reader
-                                            pc/open-ident-reader
-                                            p/env-placeholder-reader]
-                  ::p/placeholder-prefixes #{">"}}}))
+     ::p/mutate  pc/mutate-async
+     ::p/env     {::p/reader                   [p/map-reader
+                                                pc/parallel-reader
+                                                pc/open-ident-reader
+                                                p/env-placeholder-reader]
+                  :conduit.client-root/jwt     (atom nil)
+                  :conduit.client-root/api-url "https://conduit.productionready.io/api"
+                  ::pd.http/driver             pd.clj-http/request-async
+                  ::p/placeholder-prefixes     #{">"}}}))
 
 (defn api
   [req]
-  (let [tx (try
-             (-> req :body io/input-stream (t/reader :json) t/read)
-             (catch Throwable ex
-               (println ex)
-               []))
-        result (parser req tx)]
-    (prn {:tx tx :result result})
+  (let [tx (-> req :body io/input-stream (t/reader :json) t/read)
+        result (async/<!! (parser req tx))]
     {:body   (fn [out]
                (let [w (t/writer out :json)]
                  (t/write w result)))
@@ -90,7 +94,7 @@
                 ::http/join?             false
                 ::http/mime-types        mime/default-mime-types
                 ::http/file-path         "target"
-                ::http/resource-path "public"
+                ::http/resource-path     "public"
                 ::http/type              :jetty
                 ::http/container-options {}
                 ::http/port              8000}
@@ -98,3 +102,9 @@
                http/dev-interceptors
                http/create-server
                http/start))))
+
+(comment
+  (require 'shadow.cljs.devtools.server)
+
+  (shadow.cljs.devtools.server/start!)
+  (shadow.cljs.devtools.api/watch :conduit))

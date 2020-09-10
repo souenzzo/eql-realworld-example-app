@@ -1,10 +1,12 @@
-(ns conduit.register
+(ns conduit.connect
   (:require [com.wsscode.pathom.connect :as pc]
             [clojure.core.async :as async]
             #?@(:cljs    [[clojure.core.async.interop :refer [<p!]]
                           [goog.object :as gobj]]
                 :default [[clojure.instant :as instant]
-                          [cheshire.core :as json]])))
+                          [cheshire.core :as json]])
+            [com.wsscode.pathom.diplomat.http :as http]
+            [clojure.string :as string]))
 
 (defn read-instant-date
   [s]
@@ -19,27 +21,25 @@
 #?(:clj (def js->clj identity))
 
 (defn fetch
-  [{:conduit.client-root/keys [jwt api-url]} {::keys [path method body]
-                                              :or    {method "GET"}}]
-  #?(:cljs (let [authorization (some-> jwt
-                                       deref
-                                       (->> (str "Token ")))
-                 headers (cond-> #js{"Content-Type" "application/json"}
-                                 authorization (doto (gobj/set "Authorization" authorization)))
-                 opts (cond-> #js{:method  method
-                                  :headers headers}
-                              body (doto (gobj/set "body" body)))]
-             (async/go
-               (-> (js/fetch (str api-url path) opts)
-                   <p!
-                   .json
-                   <p!)))
-     :default (let [p (async/promise-chan)]
-                (async/put! p {})
-                p)))
+  [{:conduit.client-root/keys [jwt api-url]
+    :as                       env}
+   {::keys [path method body]
+    :or    {method "GET"}}]
+  (let [authorization (some-> jwt
+                              deref
+                              (->> (str "Token ")))
+        url (str api-url path)]
+    (cond-> (assoc env
+              ::http/as ::http/json
+              ::http/url url
+              ::http/content-type ::http/json
+              ::http/method (keyword "com.wsscode.pathom.diplomat.http" (string/lower-case method)))
+            body (assoc ::http/body body)
+            authorization (assoc [::http/headers "Authorization"] body)
+            :always http/request)))
 
 (defn qualify-profile
-  [{:strs [bio
+  [{:keys [bio
            following
            token
            image
@@ -55,7 +55,7 @@
                           :username  username}))
 
 (defn qualify-article
-  [{:strs [title slug body createdAt updatedAt tagList description author favorited favoritesCount]}]
+  [{:keys [title slug body createdAt updatedAt tagList description author favorited favoritesCount]}]
   (let [profile (when author
                   (qualify-profile author))]
     (into {}
@@ -119,10 +119,10 @@
                   (let [body #js {:user #js{:email    email
                                             :password password}}]
                     (async/go
-                      (let [response (async/<! (fetch env {::path   "/users/login"
-                                                           ::method "POST"
-                                                           ::body   (json-stringify body)}))
-                            {:strs [errors user]} (js->clj response)
+                      (let [response (::http/body (async/<! (fetch env {::path   "/users/login"
+                                                                        ::method "POST"
+                                                                        ::body   (json-stringify body)})))
+                            {:keys [errors user]} (js->clj response)
                             {:conduit.profile/keys [token]
                              :as                   my-profile} (assoc (qualify-profile user)
                                                                  :conduit.profile/email email)]
@@ -146,10 +146,10 @@
                                             :username username
                                             :password password}}]
                     (async/go
-                      (let [response (async/<! (fetch env {::path   "/users"
-                                                           ::method "POST"
-                                                           ::body   (json-stringify body)}))
-                            {:strs [errors user]} (js->clj response)
+                      (let [response (::http/body (async/<! (fetch env {::path   "/users"
+                                                                        ::method "POST"
+                                                                        ::body   (json-stringify body)})))
+                            {:keys [errors user]} (js->clj response)
                             {:conduit.profile/keys [token]
                              :as                   my-profile} (assoc (qualify-profile user)
                                                                  :conduit.profile/email email)]
@@ -171,8 +171,8 @@
                               :conduit.article/title]}
                 (fn [ctx {:conduit.article/keys [slug]}]
                   (async/go
-                    (let [result (async/<! (fetch ctx {::path (str "/articles/" slug)}))
-                          {:strs [article]} (js->clj result)]
+                    (let [result (::http/body (async/<! (fetch ctx {::path (str "/articles/" slug)})))
+                          {:keys [article]} (js->clj result)]
                       (qualify-article article)))))
    (pc/resolver `slug->href
                 {::pc/input  #{:conduit.article/slug}
@@ -189,9 +189,9 @@
                  ::pc/output [:conduit.article/comments]}
                 (fn [ctx {:conduit.article/keys [slug]}]
                   (async/go
-                    (let [result (async/<! (fetch ctx {::path (str "/articles/" slug "/comments")}))
-                          {:strs [comments]} (js->clj result)]
-                      {:conduit.article/comments (for [{:strs [id body createdAt author updatedAt]} comments
+                    (let [result (::http/body (async/<! (fetch ctx {::path (str "/articles/" slug "/comments")})))
+                          {:keys [comments]} (js->clj result)]
+                      {:conduit.article/comments (for [{:keys [id body createdAt author updatedAt]} comments
                                                        :let [profile (qualify-profile author)]]
                                                    (merge
                                                      profile
@@ -206,8 +206,8 @@
                       :as                       env} _]
                   (when @jwt
                     (async/go
-                      (let [result (async/<! (fetch env {::path (str "/user")}))
-                            {:strs [user]} (js->clj result)]
+                      (let [result (::http/body (async/<! (fetch env {::path (str "/user")})))
+                            {:keys [user]} (js->clj result)]
                         {:conduit.client-root/my-profile (assoc (qualify-profile user)
                                                            :conduit.profile/me? true)})))))
    (pc/resolver `profile
@@ -217,8 +217,8 @@
                               :conduit.profile/following]}
                 (fn [ctx {:conduit.profile/keys [username]}]
                   (async/go
-                    (let [result (async/<! (fetch ctx {::path (str "/profiles/" username)}))
-                          {:strs [profile]} (js->clj result)]
+                    (let [result (::http/body (async/<! (fetch ctx {::path (str "/profiles/" username)})))
+                          {:keys [profile]} (js->clj result)]
                       (qualify-profile profile)))))
    (pc/resolver `profile/articles
                 {::pc/input  #{:conduit.profile/username}
@@ -226,8 +226,8 @@
                               :conduit.profile/articles]}
                 (fn [ctx {:conduit.profile/keys [username]}]
                   (async/go
-                    (let [result (async/<! (fetch ctx {::path (str "/articles?author=" username "&limit=5&offset=0")}))
-                          {:strs [articles articlesCount]} (js->clj result)]
+                    (let [result (::http/body (async/<! (fetch ctx {::path (str "/articles?author=" username "&limit=5&offset=0")})))
+                          {:keys [articles articlesCount]} (js->clj result)]
                       {:conduit.profile/article-count articlesCount
                        :conduit.profile/articles      (map qualify-article articles)}))))
    (pc/resolver `fav-articles
@@ -242,16 +242,16 @@
                 {::pc/output [:conduit.client-root/popular-tags]}
                 (fn [ctx _]
                   (async/go
-                    (let [result (async/<! (fetch ctx {::path "/tags"}))
-                          {:strs [tags]} (js->clj result)]
+                    (let [result (::http/body (async/<! (fetch ctx {::path "/tags"})))
+                          {:keys [tags]} (js->clj result)]
                       {:conduit.client-root/popular-tags (for [tag tags]
                                                            {:conduit.tag/tag tag})}))))
    (pc/resolver `articles
                 {::pc/output [:conduit.client-root/articles]}
                 (fn [ctx _]
                   (async/go
-                    (let [result (async/<! (fetch ctx {::path "/articles"}))
-                          {:strs [articlesCount
+                    (let [result (::http/body (async/<! (fetch ctx {::path "/articles"})))
+                          {:keys [articlesCount
                                   articles]} (js->clj result)]
                       {:conduit.client-root/articles-count articlesCount
                        :conduit.client-root/articles       (for [article articles]

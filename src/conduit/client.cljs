@@ -2,6 +2,8 @@
   (:require [conduit.client-root :as cr]
             [com.fulcrologic.fulcro.algorithms.tx-processing :as ftx]
             [com.wsscode.pathom.connect :as pc]
+            [com.wsscode.pathom.diplomat.http :as pd.http]
+            [com.wsscode.pathom.diplomat.http.fetch :as pd.fetch]
             [com.wsscode.pathom.core :as p]
             [conduit.register :as register]
             [clojure.core.async :as async]
@@ -37,6 +39,7 @@
                               IReset (-reset! [this value] (.setItem js/localStorage "jwt" value)
                                        value))
    ::cr/api-url             "https://conduit.productionready.io/api"
+   ::pd.http/driver         pd.fetch/request-async
    ::p/reader               [p/map-reader
                              pc/parallel-reader
                              pc/open-ident-reader
