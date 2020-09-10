@@ -1,24 +1,22 @@
 (ns conduit.connect
-  (:require [com.wsscode.pathom.connect :as pc]
-            [clojure.core.async :as async]
-            #?@(:cljs    [[clojure.core.async.interop :refer [<p!]]
+  (:require #?@(:cljs    [[clojure.core.async.interop :refer [<p!]]
                           [goog.object :as gobj]]
                 :default [[clojure.instant :as instant]
                           [cheshire.core :as json]])
+            [com.wsscode.pathom.connect :as pc]
             [com.wsscode.pathom.diplomat.http :as http]
+            [clojure.core.async :as async]
             [clojure.string :as string]))
 
 (defn read-instant-date
   [s]
-  #?(:cljs    (new js/Date s)
+  #?(:cljs    (js/Date. s)
      :default (instant/read-instant-date s)))
 
 (defn json-stringify
   [value]
   #?(:cljs    (js/JSON.stringify value)
      :default (json/generate-string value)))
-
-#?(:clj (def js->clj identity))
 
 (defn fetch
   [{:conduit.client-root/keys [jwt api-url]
@@ -119,10 +117,10 @@
                   (let [body #js {:user #js{:email    email
                                             :password password}}]
                     (async/go
-                      (let [response (::http/body (async/<! (fetch env {::path   "/users/login"
-                                                                        ::method "POST"
-                                                                        ::body   (json-stringify body)})))
-                            {:keys [errors user]} (js->clj response)
+                      (let [{::http/keys [body]} (async/<! (fetch env {::path   "/users/login"
+                                                                       ::method "POST"
+                                                                       ::body   (json-stringify body)}))
+                            {:keys [errors user]} body
                             {:conduit.profile/keys [token]
                              :as                   my-profile} (assoc (qualify-profile user)
                                                                  :conduit.profile/email email)]
@@ -146,10 +144,10 @@
                                             :username username
                                             :password password}}]
                     (async/go
-                      (let [response (::http/body (async/<! (fetch env {::path   "/users"
-                                                                        ::method "POST"
-                                                                        ::body   (json-stringify body)})))
-                            {:keys [errors user]} (js->clj response)
+                      (let [{::http/keys [body]} (async/<! (fetch env {::path   "/users"
+                                                                       ::method "POST"
+                                                                       ::body   (json-stringify body)}))
+                            {:keys [errors user]} body
                             {:conduit.profile/keys [token]
                              :as                   my-profile} (assoc (qualify-profile user)
                                                                  :conduit.profile/email email)]
@@ -171,8 +169,8 @@
                               :conduit.article/title]}
                 (fn [ctx {:conduit.article/keys [slug]}]
                   (async/go
-                    (let [result (::http/body (async/<! (fetch ctx {::path (str "/articles/" slug)})))
-                          {:keys [article]} (js->clj result)]
+                    (let [{::http/keys [body]} (async/<! (fetch ctx {::path (str "/articles/" slug)}))
+                          {:keys [article]} body]
                       (qualify-article article)))))
    (pc/resolver `slug->href
                 {::pc/input  #{:conduit.article/slug}
@@ -189,8 +187,8 @@
                  ::pc/output [:conduit.article/comments]}
                 (fn [ctx {:conduit.article/keys [slug]}]
                   (async/go
-                    (let [result (::http/body (async/<! (fetch ctx {::path (str "/articles/" slug "/comments")})))
-                          {:keys [comments]} (js->clj result)]
+                    (let [{::http/keys [body]} (async/<! (fetch ctx {::path (str "/articles/" slug "/comments")}))
+                          {:keys [comments]} body]
                       {:conduit.article/comments (for [{:keys [id body createdAt author updatedAt]} comments
                                                        :let [profile (qualify-profile author)]]
                                                    (merge
@@ -206,8 +204,8 @@
                       :as                       env} _]
                   (when @jwt
                     (async/go
-                      (let [result (::http/body (async/<! (fetch env {::path (str "/user")})))
-                            {:keys [user]} (js->clj result)]
+                      (let [{::http/keys [body]} (async/<! (fetch env {::path (str "/user")}))
+                            {:keys [user]} body]
                         {:conduit.client-root/my-profile (assoc (qualify-profile user)
                                                            :conduit.profile/me? true)})))))
    (pc/resolver `profile
@@ -217,8 +215,8 @@
                               :conduit.profile/following]}
                 (fn [ctx {:conduit.profile/keys [username]}]
                   (async/go
-                    (let [result (::http/body (async/<! (fetch ctx {::path (str "/profiles/" username)})))
-                          {:keys [profile]} (js->clj result)]
+                    (let [{::http/keys [body]} (async/<! (fetch ctx {::path (str "/profiles/" username)}))
+                          {:keys [profile]} body]
                       (qualify-profile profile)))))
    (pc/resolver `profile/articles
                 {::pc/input  #{:conduit.profile/username}
@@ -226,8 +224,8 @@
                               :conduit.profile/articles]}
                 (fn [ctx {:conduit.profile/keys [username]}]
                   (async/go
-                    (let [result (::http/body (async/<! (fetch ctx {::path (str "/articles?author=" username "&limit=5&offset=0")})))
-                          {:keys [articles articlesCount]} (js->clj result)]
+                    (let [{::http/keys [body]} (async/<! (fetch ctx {::path (str "/articles?author=" username "&limit=5&offset=0")}))
+                          {:keys [articles articlesCount]} body]
                       {:conduit.profile/article-count articlesCount
                        :conduit.profile/articles      (map qualify-article articles)}))))
    (pc/resolver `fav-articles
@@ -242,17 +240,17 @@
                 {::pc/output [:conduit.client-root/popular-tags]}
                 (fn [ctx _]
                   (async/go
-                    (let [result (::http/body (async/<! (fetch ctx {::path "/tags"})))
-                          {:keys [tags]} (js->clj result)]
+                    (let [{::http/keys [body]} (async/<! (fetch ctx {::path "/tags"}))
+                          {:keys [tags]} body]
                       {:conduit.client-root/popular-tags (for [tag tags]
                                                            {:conduit.tag/tag tag})}))))
    (pc/resolver `articles
                 {::pc/output [:conduit.client-root/articles]}
                 (fn [ctx _]
                   (async/go
-                    (let [result (::http/body (async/<! (fetch ctx {::path "/articles"})))
+                    (let [{::http/keys [body]} (async/<! (fetch ctx {::path "/articles"}))
                           {:keys [articlesCount
-                                  articles]} (js->clj result)]
+                                  articles]} body]
                       {:conduit.client-root/articles-count articlesCount
                        :conduit.client-root/articles       (for [article articles]
                                                              (qualify-article article))}))))])

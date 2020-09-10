@@ -3,7 +3,7 @@
             [hiccup2.core :as h]
             [cognitect.transit :as t]
             [com.wsscode.pathom.core :as p]
-            [conduit.register :as register]
+            [conduit.connect :as connect]
             [com.wsscode.pathom.diplomat.http :as pd.http]
             [com.wsscode.pathom.diplomat.http.clj-http :as pd.clj-http]
             [com.wsscode.pathom.connect :as pc]
@@ -57,7 +57,7 @@
 
 (def parser
   (p/parallel-parser
-    {::p/plugins [(pc/connect-plugin {::pc/register register/register})
+    {::p/plugins [(pc/connect-plugin {::pc/register connect/register})
                   p/elide-special-outputs-plugin]
      ::p/mutate  pc/mutate-async
      ::p/env     {::p/reader                   [p/map-reader

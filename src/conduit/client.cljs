@@ -5,7 +5,7 @@
             [com.wsscode.pathom.diplomat.http :as pd.http]
             [com.wsscode.pathom.diplomat.http.fetch :as pd.fetch]
             [com.wsscode.pathom.core :as p]
-            [conduit.register :as register]
+            [conduit.connect :as connect]
             [clojure.core.async :as async]
             [com.fulcrologic.fulcro.application :as app]
             [edn-query-language.core :as eql])
@@ -26,7 +26,7 @@
 
 (def parser
   (p/parallel-parser
-    {::p/plugins [(pc/connect-plugin {::pc/register (concat register/register
+    {::p/plugins [(pc/connect-plugin {::pc/register (concat connect/register
                                                             [pc/index-explorer-resolver])})
                   p/elide-special-outputs-plugin]
      ::p/mutate  pc/mutate-async}))
