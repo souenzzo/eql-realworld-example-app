@@ -107,43 +107,45 @@
 (defonce http-state (atom nil))
 (defn -main
   [& _]
-  (swap! http-state
-         (fn [st]
-           (some-> st http/stop)
-           (-> {::http/routes                routes
-                ::http/join?                 false
-                ::http/mime-types            mime/default-mime-types
-                ::http/file-path             "target"
-                ::http/resource-path         "public"
-                ::http/type                  :jetty
-                ::http/container-options     {}
-                ::http/not-found-interceptor {:name  ::not-found
-                                              :leave (fn [{{:keys [uri]} :request
-                                                           :keys         [response]
-                                                           :as           ctx}]
-                                                       (if (http/response? response)
-                                                         ctx
-                                                         (assoc ctx
-                                                           :response {:body    (->> [:html {:lang "en-US"}
-                                                                                     [:head
-                                                                                      [:title "conduit"]]
-                                                                                     [:body
-                                                                                      [:h1 (str "Can't find " (pr-str uri))]
-                                                                                      [:p "Try one of these"]
-                                                                                      [:ul
-                                                                                       (for [[href method route] routes
-                                                                                             :when (= method :get)]
-                                                                                         [:li [:a {:href href} route]])]]]
-                                                                                    (h/html {:mode :html}
-                                                                                            (h/raw "<!DOCTYPE html>\n"))
-                                                                                    str)
-                                                                      :headers {"Content-Type" (mime/default-mime-types "html")}
-                                                                      :status  404})))}
-                ::http/port                  (or (some-> "PORT" System/getenv edn/read-string)
-                                                 8000)}
-               http/default-interceptors
-               http/create-server
-               http/start))))
+  (let [port (or (some-> "PORT" System/getenv edn/read-string)
+                 8000)]
+    (prn [:port port])
+    (swap! http-state
+           (fn [st]
+             (some-> st http/stop)
+             (-> {::http/routes                routes
+                  ::http/join?                 false
+                  ::http/mime-types            mime/default-mime-types
+                  ::http/file-path             "target"
+                  ::http/resource-path         "public"
+                  ::http/type                  :jetty
+                  ::http/container-options     {}
+                  ::http/not-found-interceptor {:name  ::not-found
+                                                :leave (fn [{{:keys [uri]} :request
+                                                             :keys         [response]
+                                                             :as           ctx}]
+                                                         (if (http/response? response)
+                                                           ctx
+                                                           (assoc ctx
+                                                             :response {:body    (->> [:html {:lang "en-US"}
+                                                                                       [:head
+                                                                                        [:title "conduit"]]
+                                                                                       [:body
+                                                                                        [:h1 (str "Can't find " (pr-str uri))]
+                                                                                        [:p "Try one of these"]
+                                                                                        [:ul
+                                                                                         (for [[href method route] routes
+                                                                                               :when (= method :get)]
+                                                                                           [:li [:a {:href href} route]])]]]
+                                                                                      (h/html {:mode :html}
+                                                                                              (h/raw "<!DOCTYPE html>\n"))
+                                                                                      str)
+                                                                        :headers {"Content-Type" (mime/default-mime-types "html")}
+                                                                        :status  404})))}
+                  ::http/port                  port}
+                 http/default-interceptors
+                 http/create-server
+                 http/start)))))
 
 (comment
   (require 'shadow.cljs.devtools.server)

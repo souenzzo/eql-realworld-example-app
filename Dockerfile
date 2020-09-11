@@ -11,6 +11,6 @@ COPY --chown=conduit . .
 COPY --from=node --chown=conduit node_modules node_modules
 RUN clojure -A:shadow-cljs release conduit \
  && clojure -A:shadow-cljs run shadow.cljs.build-report conduit target/report.html \
- && mkdir classes \
- && clojure -J-Dclojure.main.report=stderr -e "(compile 'conduit.server)"
-CMD ["clojure", "-J-Dclojure.main.report=stderr", "-J-Xmx450m", "-m", "conduit.server"]
+ && mkdir -p classes \
+ && clojure -A:aot
+CMD ["clojure", "-A:conduit"]

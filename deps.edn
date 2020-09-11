@@ -12,6 +12,11 @@
  :aliases {:shadow-cljs {:extra-deps {thheller/shadow-cljs {:mvn/version "2.10.19"}}
                          :jvm-opts   ["-Dclojure.main.report=stderr"]
                          :main-opts  ["-m" "shadow.cljs.devtools.cli"]}
+           :aot         {:jvm-opts  ["-Dclojure.main.report=stderr"]
+                         :main-opts ["-e" "(compile,(symbol,:conduit.server))"]}
+           :conduit     {:extra-paths ["classes"]
+                         :jvm-opts    ["-Dclojure.main.report=stderr" "-Xmx450m"]
+                         :main-opts   ["-m" "conduit.server"]}
            :dev         {:extra-deps  {binaryage/devtools  {:mvn/version "1.0.2"}
                                        clj-kondo/clj-kondo {:mvn/version "2020.07.29"}
                                        nubank/workspaces   {:mvn/version "1.0.15"}}
