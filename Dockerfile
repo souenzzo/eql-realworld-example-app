@@ -13,4 +13,4 @@ RUN clojure -A:shadow-cljs release conduit \
  && clojure -A:shadow-cljs run shadow.cljs.build-report conduit target/report.html \
  && mkdir classes \
  && clojure -J-Dclojure.main.report=stderr -e "(compile 'conduit.server)"
-CMD ["clojure", "-J-Dclojure.main.report=stderr", "-J-Xmx1G", "-m", "conduit.server"]
+CMD ["clojure", "-J-Dclojure.main.report=stderr", "-J-Xmx500m", "-m", "conduit.server"]
