@@ -10,7 +10,7 @@
            org.clojure/core.async       {:mvn/version "1.3.610"}
            clj-http/clj-http            {:mvn/version "3.10.2"}}
  :aliases {:shadow-cljs {:extra-deps {thheller/shadow-cljs {:mvn/version "2.10.19"}}
-                         :main-opts  ["-m" "shadow.cljs.devtools.cli"]}
+                         :main-opts  ["-Dclojure.main.report=stderr" "-m" "shadow.cljs.devtools.cli"]}
            :dev         {:extra-deps  {binaryage/devtools  {:mvn/version "1.0.2"}
                                        clj-kondo/clj-kondo {:mvn/version "2020.07.29"}
                                        nubank/workspaces   {:mvn/version "1.0.15"}}
