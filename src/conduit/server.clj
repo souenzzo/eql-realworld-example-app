@@ -109,6 +109,7 @@
        ::http/mime-types            mime/default-mime-types
        ::http/file-path             "target"
        ::http/resource-path         "public"
+       ::http/host                  "0.0.0.0"
        ::http/type                  :jetty
        ::http/container-options     {}
        ::http/not-found-interceptor {:name  ::not-found
