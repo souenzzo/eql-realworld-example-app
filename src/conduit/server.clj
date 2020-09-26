@@ -45,7 +45,7 @@
   [req]
   {:body    (->> [:html {:lang "en-US"}
                   (ui-head req)
-                  [:body {:onload "conduit.eql_client.main('conduit')"}
+                  [:body {:onload "conduit.client.main('conduit')"}
                    [:div {:id "conduit"}]
                    [:script {:src "/conduit/main.js"}]]]
                  (h/html {:mode :html}
@@ -59,7 +59,7 @@
   [req]
   {:body    (->> [:html {:lang "en-US"}
                   (ui-head req)
-                  [:body {:onload "conduit.client.main('conduit')"}
+                  [:body {:onload "conduit.eql_client.main('conduit')"}
                    [:div {:id "conduit"}]
                    [:script {:src "/conduit/main.js"}]]]
                  (h/html {:mode :html}

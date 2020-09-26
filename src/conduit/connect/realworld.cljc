@@ -1,4 +1,4 @@
-(ns conduit.connect
+(ns conduit.connect.realworld
   (:require #?@(:cljs    [[clojure.core.async.interop :refer [<p!]]
                           [goog.object :as gobj]]
                 :default [[clojure.instant :as instant]
@@ -37,41 +37,31 @@
             :always http/request)))
 
 (defn qualify-profile
-  [{:keys [bio
-           following
-           token
-           image
-           email
-           username]}]
-  (into {}
-        (remove (comp nil? val))
-        #:conduit.profile{:bio       bio
-                          :following following
-                          :image     image
-                          :token     token
-                          :email     email
-                          :username  username}))
+  [profile]
+  (->> profile
+       (into {}
+             (map (fn [[k v]]
+                    [(keyword "conduit.profile" (name k))
+                     v])))))
 
 (defn qualify-article
-  [{:keys [title slug body createdAt updatedAt tagList description author favorited favoritesCount]}]
+  [{:keys [author]
+    :as   article}]
   (let [profile (when author
                   (qualify-profile author))]
-    (into {}
-          (remove (comp nil? val))
-          (merge profile
-                 (when author
-                   {:conduit.article/author profile})
-                 {:conduit.article/title           title
-                  :conduit.article/created-at      (read-instant-date createdAt)
-                  :conduit.article/slug            slug
-                  :conduit.article/updated-at      updatedAt
-                  :conduit.article/description     description
-                  :conduit.article/favorited?      favorited
-                  :conduit.article/favorites-count favoritesCount
-                  :conduit.article/tag-list        (for [tag tagList]
-                                                     {:conduit.tag/tag tag})
-
-                  :conduit.article/body            body}))))
+    (->> article
+         (into (if profile
+                 profile
+                 {})
+               (map (fn [[k v]]
+                      (cond
+                        (= k :createdAt) [:conduit.article/created-at
+                                          (read-instant-date v)]
+                        (= k :tagList) [:conduit.article/tag-list
+                                        (for [tag v]
+                                          {:conduit.tag/tag tag})]
+                        :else [(keyword "conduit.article" (name k))
+                               v])))))))
 
 
 (def register

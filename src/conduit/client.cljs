@@ -5,7 +5,7 @@
             [com.wsscode.pathom.diplomat.http :as pd.http]
             [com.wsscode.pathom.diplomat.http.fetch :as pd.fetch]
             [com.wsscode.pathom.core :as p]
-            [conduit.connect :as connect]
+            [conduit.connect.realworld :as connect]
             [clojure.core.async :as async]
             [com.fulcrologic.fulcro.application :as app]
             [edn-query-language.core :as eql])
