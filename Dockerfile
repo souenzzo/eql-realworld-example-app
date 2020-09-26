@@ -6,7 +6,7 @@ FROM clojure:openjdk-16-tools-deps-alpine
 RUN adduser -D conduit
 USER conduit
 WORKDIR /home/conduit
-COPY --chown=conduit . .
+COPY --chown=conduit ./src ./resources ./deps.edn ./shadow-cljs.edn ./
 COPY --from=node --chown=conduit node_modules node_modules
 RUN clojure -A:shadow-cljs release conduit \
  && echo    -A:shadow-cljs run shadow.cljs.build-report conduit target/report.html \
