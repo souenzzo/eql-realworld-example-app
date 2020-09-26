@@ -1,0 +1,10 @@
+.idea/
+target/
+node_modules/
+.cpcache/
+.shadow-cljs/
+gh-pages/
+.nrepl-port
+*.iml
+
+

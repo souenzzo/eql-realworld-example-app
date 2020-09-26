@@ -1,8 +1,8 @@
 FROM node:alpine AS node
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .
 RUN npm install
 
-FROM openjdk-16-tools-deps-alpine
+FROM clojure:openjdk-16-tools-deps-alpine
 RUN useradd -m conduit
 USER conduit
 WORKDIR /home/conduit
