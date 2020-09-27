@@ -1,6 +1,5 @@
 (ns conduit.connect.realworld
-  (:require #?@(:cljs    [[clojure.core.async.interop :refer [<p!]]
-                          [goog.object :as gobj]]
+  (:require #?@(:cljs    []
                 :default [[clojure.instant :as instant]
                           [cheshire.core :as json]])
             [com.wsscode.pathom.connect :as pc]
