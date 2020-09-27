@@ -3,6 +3,7 @@
            com.wsscode/pathom           {:mvn/version "2.3.0-alpha10"}
            edn-query-language/eql       {:mvn/version "1.0.0"}
            io.pedestal/pedestal.service {:mvn/version "0.5.8"}
+           cheshire/cheshire            {:mvn/version "5.10.0"}
            io.pedestal/pedestal.jetty   {:mvn/version "0.5.8"}
            datascript/datascript        {:mvn/version "1.0.1"}
            com.cognitect/transit-clj    {:mvn/version "1.0.324"}

@@ -11,7 +11,7 @@
             [clojure.java.io :as io]
             [clojure.core.async :as async]
             [clojure.edn :as edn]
-            [clojure.data.json :as json]))
+            [cheshire.core :as json]))
 
 (defn ui-head
   [req]
@@ -100,7 +100,7 @@
 
 (defn manifest
   [_]
-  {:body   (json/write-str
+  {:body   (json/generate-string
              {:name             "Conduit"
               :display          "minimal-ui"
               :short_name       "Conduit"
