@@ -5,8 +5,7 @@
             [com.wsscode.pathom.connect :as pc]
             [com.wsscode.pathom.diplomat.http :as http]
             [clojure.core.async :as async]
-            [clojure.string :as string]
-            [clojure.pprint :as pp]))
+            [clojure.string :as string]))
 
 (defn read-instant-date
   [s]
@@ -238,18 +237,10 @@
                 {::pc/output [:conduit.client-root/articles]}
                 (fn [ctx _]
                   (async/go
-                    (try
-                      (let [{::http/keys [body status] :as x} (async/<! (fetch ctx {::path "/articles"}))
-                            {:keys [articlesCount
-                                    articles]} body
-                            articles* (for [article articles]
-                                        (qualify-article article))]
-                        (pp/pprint {:status  status
-                                    :raw     (first articles)
-                                    :n       articlesCount
-                                    :x       x
-                                    :qualify (first articles*)})
-                        {:conduit.client-root/articles-count articlesCount
-                         :conduit.client-root/articles       articles*})
-                      (catch Throwable ex
-                        (pp/pprint ex))))))])
+                    (let [{::http/keys [body]} (async/<! (fetch ctx {::path "/articles"}))
+                          {:keys [articlesCount
+                                  articles]} body
+                          articles* (for [article articles]
+                                      (qualify-article article))]
+                      {:conduit.client-root/articles-count articlesCount
+                       :conduit.client-root/articles       articles*}))))])
