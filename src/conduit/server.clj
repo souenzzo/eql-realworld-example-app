@@ -10,7 +10,8 @@
             [ring.util.mime-type :as mime]
             [clojure.java.io :as io]
             [clojure.core.async :as async]
-            [clojure.edn :as edn]))
+            [clojure.edn :as edn]
+            [clojure.data.json :as json]))
 
 (defn ui-head
   [req]
@@ -25,7 +26,7 @@
            :type        "text/css"}]
    [:link {:href        "//fonts.googleapis.com/css?family=Titillium+Web:700|Source+Serif+Pro:400,700|Merriweather+Sans:400,700|Source+Sans+Pro:400,300,600,700,300italic,400italic,600italic,700italic"
            :rel         "stylesheet"
-           :integrity   "sha384-PBaIOeCGdwYMJUREr7Et2jvAaCoHZUczrSKwxG4QG+w6F/I9mUf2nKd66wwCfVyX"
+           :integrity   "sha256-e7a6pIeT2/bvA4upH/sSZ2wo1eD6CSskP9cW3ePy3IY="
            :crossorigin "anonymous"
            :type        "text/css"}]
    [:link {:rel  "stylesheet"
@@ -39,7 +40,7 @@
    [:meta {:name    "theme-color"
            :content "#5cb85c"}]
    [:link {:rel  "manifest"
-           :href "manifest.webmanifest"}]])
+           :href "/manifest.webmanifest"}]])
 
 (defn spa
   [req]
@@ -97,8 +98,22 @@
                  (t/write w result)))
      :status 200}))
 
+(defn manifest
+  [_]
+  {:body   (json/write-str
+             {:name             "Conduit"
+              :display          "minimal-ui"
+              :short_name       "Conduit"
+              :theme_color      "#5cb85c"
+              :start_url        "https://souenzzo.com.br/eql-realworld-example-app/"
+              :background_color "#ffffff"
+              :manifest_version 2
+              :version          "1"})
+   :status 200})
+
 (def routes
   `#{["/spa" :get spa]
+     ["/manifest.webmanifest" :get manifest]
      ["/spa-proxy" :get spa-proxy]
      ["/realworld-api" :post realworld-api]
      ["/workspace" :post workspace]})
