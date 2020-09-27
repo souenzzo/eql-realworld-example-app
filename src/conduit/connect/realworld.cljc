@@ -240,7 +240,7 @@
                 (fn [ctx _]
                   (async/go
                     (try
-                      (let [{::http/keys [body status]} (async/<! (fetch ctx {::path "/articles"}))
+                      (let [{::http/keys [body status] :as x} (async/<! (fetch ctx {::path "/articles"}))
                             {:keys [articlesCount
                                     articles]} body
                             articles* (for [article articles]
@@ -248,6 +248,7 @@
                         (pp/pprint {:status  status
                                     :raw     (first articles)
                                     :n       articlesCount
+                                    :x       x
                                     :qualify (first articles*)})
                         {:conduit.client-root/articles-count articlesCount
                          :conduit.client-root/articles       articles*})
