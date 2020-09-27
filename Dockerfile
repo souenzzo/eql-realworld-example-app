@@ -12,7 +12,8 @@ RUN clojure -A:shadow-cljs -Spath \
  && clojure -A:conduit -Spath
 COPY --chown=conduit . .
 COPY --from=node --chown=conduit node_modules node_modules
-RUN clojure -A:shadow-cljs release conduit \
+RUN TIMBRE_LEVEL=:report \
+    clojure -A:shadow-cljs release conduit \
  && echo    -A:shadow-cljs run shadow.cljs.build-report conduit target/report.html \
  && mkdir -p classes \
  && clojure -A:aot \

@@ -105,7 +105,7 @@
               :display          "minimal-ui"
               :short_name       "Conduit"
               :theme_color      "#5cb85c"
-              :start_url        "https://souenzzo.com.br/eql-realworld-example-app/"
+              :start_url        "https://eql-realworld-example-app.herokuapp.com/spa-proxy"
               :background_color "#ffffff"
               :manifest_version 2
               :version          "1"})
