@@ -3,7 +3,7 @@
             [hiccup2.core :as h]
             [cognitect.transit :as t]
             [com.wsscode.pathom.core :as p]
-            [conduit.connect :as connect]
+            [conduit.connect.realworld :as connect.realworld]
             [com.wsscode.pathom.diplomat.http :as pd.http]
             [com.wsscode.pathom.diplomat.http.clj-http :as pd.clj-http]
             [com.wsscode.pathom.connect :as pc]
@@ -59,7 +59,7 @@
   [req]
   {:body    (->> [:html {:lang "en-US"}
                   (ui-head req)
-                  [:body {:onload "conduit.eql_client.main('conduit')"}
+                  [:body {:onload "conduit.eql_client.main('conduit', '/realworld-api')"}
                    [:div {:id "conduit"}]
                    [:script {:src "/conduit/main.js"}]]]
                  (h/html {:mode :html}
@@ -74,9 +74,9 @@
   {:status 200})
 
 
-(def parser
+(def realworld-parser
   (p/parallel-parser
-    {::p/plugins [(pc/connect-plugin {::pc/register connect/register})
+    {::p/plugins [(pc/connect-plugin {::pc/register connect.realworld/register})
                   p/elide-special-outputs-plugin]
      ::p/mutate  pc/mutate-async
      ::p/env     {::p/reader                   [p/map-reader
@@ -88,10 +88,10 @@
                   ::pd.http/driver             pd.clj-http/request-async
                   ::p/placeholder-prefixes     #{">"}}}))
 
-(defn api
+(defn realworld-api
   [req]
   (let [tx (-> req :body io/input-stream (t/reader :json) t/read)
-        result (async/<!! (parser req tx))]
+        result (async/<!! (realworld-parser req tx))]
     {:body   (fn [out]
                (let [w (t/writer out :json)]
                  (t/write w result)))
@@ -100,7 +100,7 @@
 (def routes
   `#{["/spa" :get spa]
      ["/spa-proxy" :get spa-proxy]
-     ["/api" :post api]
+     ["/realworld-api" :post realworld-api]
      ["/workspace" :post workspace]})
 
 (def service-map

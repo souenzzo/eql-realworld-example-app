@@ -5,10 +5,11 @@
   (:import (goog.history Html5History)))
 
 (defonce app
-         (delay (app/fulcro-app {:client-did-mount cr/client-did-mount
-                                 :shared           {::cr/history (Html5History.)}
-                                 :remotes          {:remote (fnhr/fulcro-http-remote {})}})))
+         (atom nil))
 
 (defn ^:export main
-  [node]
-  (app/mount! @app cr/Root node))
+  [node url]
+  (-> (reset! app (app/fulcro-app {:client-did-mount cr/client-did-mount
+                                   :shared           {::cr/history (Html5History.)}
+                                   :remotes          {:remote (fnhr/fulcro-http-remote {:url url})}}))
+      (app/mount! cr/Root node)))
