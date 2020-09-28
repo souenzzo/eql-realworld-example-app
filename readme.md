@@ -44,6 +44,54 @@ It will work in many ways:
 ## spa + Datascript (memory) (TBD)
 
 
+# [TBD]  Clients NEXT
+
+Both frontends and backends can operate in many ways
+
+## REST Client
+
+Send's requests to the remote folloing conduit specification.
+
+It can point to:
+
+- https://conduit.productionready.io/api
+- https://eql-realworld-example-app.herokuapp.com/proxy/api
+- https://eql-realworld-example-app.herokuapp.com/datascript/api
+- https://eql-realworld-example-app.herokuapp.com/crux/api
+- https://eql-realworld-example-app.herokuapp.com/jdbc/api
+
+## EQL Client
+
+Send's EQL queries to it's remote.
+
+It can point to 
+
+- https://eql-realworld-example-app.herokuapp.com/proxy/eql
+- https://eql-realworld-example-app.herokuapp.com/datascript/eql
+- https://eql-realworld-example-app.herokuapp.com/crux/eql
+- https://eql-realworld-example-app.herokuapp.com/jdbc/eql
+
+## Datascript client
+
+It uses datascript "server" inside the SPA client.
+
+## Proxy server
+
+It receive EQL operations in https://eql-realworld-example-app.herokuapp.com/proxy/eql and 
+uses https://conduit.productionready.io/api to resolve all data.
+
+## Crux server
+
+EQL to Crux resolvers
+
+## JDBC server
+
+EQL to jdbc resolvers
+
+## Datascript server 
+
+EQL to datascript resolvers
+
 # Getting started
 
 ```bash
