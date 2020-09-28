@@ -1,4 +1,4 @@
-(ns conduit.connect.realworld
+(ns conduit.connect.proxy
   (:require #?@(:cljs    []
                 :default [[clojure.instant :as instant]
                           [cheshire.core :as json]])

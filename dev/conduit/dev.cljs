@@ -1,7 +1,7 @@
 (ns conduit.dev
   (:require [com.fulcrologic.fulcro.inspect.preload]
             [devtools.preload]
-            [conduit.client :as client]
+            [conduit.client.rest :as client]
             [com.fulcrologic.fulcro.application :as app]))
 
 (defn after-load

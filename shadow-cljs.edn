@@ -3,8 +3,8 @@
  :builds   {:conduit   {:target           :browser
                         :output-dir       "target/conduit"
                         :asset-path       "/conduit"
-                        :modules          {:main {:entries [conduit.client
-                                                            conduit.eql-client]}}
+                        :modules          {:main {:entries [conduit.client.rest
+                                                            conduit.client.eql]}}
                         :compiler-options {:source-map      true
                                            :external-config {:fulcro {:wrap-inputs? false}}}
                         :devtools         {:preloads   [conduit.dev]

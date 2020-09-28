@@ -3,7 +3,7 @@
             [hiccup2.core :as h]
             [cognitect.transit :as t]
             [com.wsscode.pathom.core :as p]
-            [conduit.connect.realworld :as connect.realworld]
+            [conduit.connect.proxy :as connect.proxy]
             [com.wsscode.pathom.diplomat.http :as pd.http]
             [com.wsscode.pathom.diplomat.http.clj-http :as pd.clj-http]
             [com.wsscode.pathom.connect :as pc]
@@ -42,12 +42,13 @@
    [:link {:rel  "manifest"
            :href "/manifest.webmanifest"}]])
 
-(defn spa
+(defn client-rest
   [req]
   {:body    (->> [:html {:lang "en-US"}
                   (ui-head req)
-                  [:body {:onload "conduit.client.main('conduit')"}
-                   [:div {:id "conduit"}]
+                  [:body {:onload "conduit.client.rest.main('conduit')"}
+                   [:section {:id           "conduit"
+                              :data-api-url "https://conduit.productionready.io/api"}]
                    [:script {:src "/conduit/main.js"}]]]
                  (h/html {:mode :html}
                          (h/raw "<!DOCTYPE html>\n"))
@@ -56,28 +57,31 @@
              "Content-Type"            (mime/default-mime-types "html")}
    :status  200})
 
-(defn spa-proxy
-  [req]
-  {:body    (->> [:html {:lang "en-US"}
-                  (ui-head req)
-                  [:body {:onload "conduit.eql_client.main('conduit', '/realworld-api')"}
-                   [:div {:id "conduit"}]
-                   [:script {:src "/conduit/main.js"}]]]
-                 (h/html {:mode :html}
-                         (h/raw "<!DOCTYPE html>\n"))
-                 str)
-   :headers {"Content-Security-Policy" ""
-             "Content-Type"            (mime/default-mime-types "html")}
-   :status  200})
+(defn client-eql
+  [{{:keys [api-url]} :query-params
+    :as               req}]
+  (when api-url
+    {:body    (->> [:html {:lang "en-US"}
+                    (ui-head req)
+                    [:body {:onload "conduit.client.eql.main('conduit')"}
+                     [:section {:id           "conduit"
+                                :data-api-url api-url}]
+                     [:script {:src "/conduit/main.js"}]]]
+                   (h/html {:mode :html}
+                           (h/raw "<!DOCTYPE html>\n"))
+                   str)
+     :headers {"Content-Security-Policy" ""
+               "Content-Type"            (mime/default-mime-types "html")}
+     :status  200}))
 
 (defn workspace
   [req]
   {:status 200})
 
 
-(def realworld-parser
+(def proxy-parser
   (p/parallel-parser
-    {::p/plugins [(pc/connect-plugin {::pc/register connect.realworld/register})
+    {::p/plugins [(pc/connect-plugin {::pc/register connect.proxy/register})
                   p/elide-special-outputs-plugin]
      ::p/mutate  pc/mutate-async
      ::p/env     {::p/reader                   [p/map-reader
@@ -89,10 +93,10 @@
                   ::pd.http/driver             pd.clj-http/request-async
                   ::p/placeholder-prefixes     #{">"}}}))
 
-(defn realworld-api
+(defn proxy-eql
   [req]
   (let [tx (-> req :body io/input-stream (t/reader :json) t/read)
-        result (async/<!! (realworld-parser req tx))]
+        result (async/<!! (proxy-parser req tx))]
     {:body   (fn [out]
                (let [w (t/writer out :json)]
                  (t/write w result)))
@@ -112,11 +116,49 @@
    :status 200})
 
 (def routes
-  `#{["/spa" :get spa]
+  `#{;; clients
+     ["/client/eql" :get client-eql]
+     ["/client/rest" :get client-rest]
+     #_["/client/datascript" :post client-datascript]
+     ;; servers
+     ["/proxy/eql" :post proxy-eql]
+     #_["/proxy/rest" :post proxy-rest]
+     #_["/datascript/eql" :post datascript-eql]
+     #_["/datascript/rest" :post datascript-rest]
+     ;; others
      ["/manifest.webmanifest" :get manifest]
-     ["/spa-proxy" :get spa-proxy]
-     ["/realworld-api" :post realworld-api]
-     ["/workspace" :post workspace]})
+     ["/workspace" :get workspace]})
+
+(defn not-found-interceptor-leave
+  [{:keys [response]
+    :as   ctx}]
+  (if (http/response? response)
+    ctx
+    (assoc ctx
+      :response {:body    (->> [:html {:lang "en-US"}
+                                [:head
+                                 [:title "conduit"]]
+                                [:body
+                                 {:onload "document.getElementById('localStorage').innerHTML = JSON.stringify(localStorage, null, 2)"}
+                                 [:p "Try one of these"]
+                                 [:ul
+                                  [:li
+                                   [:a {:href "/client/rest?api-url=https://conduit.productionready.io/api#/home"}
+                                    "REST Client with conduit REST API"]]
+                                  [:li
+                                   [:a {:href "/client/eql?api-url=/proxy/eql#/home"}
+                                    "EQL Client with proxy server to conduit REST API"]]]
+                                 [:p "localStorage"]
+                                 [:pre
+                                  {:id "localStorage"}]
+                                 [:button
+                                  {:onClick "Object.keys(localStorage).forEach(k => delete localStorage[k]); document.getElementById('localStorage').innerHTML = JSON.stringify(localStorage, null, 2)"}
+                                  "wipe localStorage"]]]
+                               (h/html {:mode :html}
+                                       (h/raw "<!DOCTYPE html>\n"))
+                               str)
+                 :headers {"Content-Type" (mime/default-mime-types "html")}
+                 :status  404})))
 
 (def service-map
   (-> {::http/routes                routes
@@ -128,27 +170,7 @@
        ::http/type                  :jetty
        ::http/container-options     {}
        ::http/not-found-interceptor {:name  ::not-found
-                                     :leave (fn [{{:keys [uri]} :request
-                                                  :keys         [response]
-                                                  :as           ctx}]
-                                              (if (http/response? response)
-                                                ctx
-                                                (assoc ctx
-                                                  :response {:body    (->> [:html {:lang "en-US"}
-                                                                            [:head
-                                                                             [:title "conduit"]]
-                                                                            [:body
-                                                                             [:h1 (str "Can't find " (pr-str uri))]
-                                                                             [:p "Try one of these"]
-                                                                             [:ul
-                                                                              (for [[href method route] routes
-                                                                                    :when (= method :get)]
-                                                                                [:li [:a {:href href} route]])]]]
-                                                                           (h/html {:mode :html}
-                                                                                   (h/raw "<!DOCTYPE html>\n"))
-                                                                           str)
-                                                             :headers {"Content-Type" (mime/default-mime-types "html")}
-                                                             :status  404})))}}
+                                     :leave not-found-interceptor-leave}}
       http/default-interceptors))
 
 (defonce http-state (atom nil))

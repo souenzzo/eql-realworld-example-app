@@ -1,12 +1,14 @@
-(ns conduit.client
+(ns conduit.client.rest
   (:require [conduit.client-root :as cr]
             [com.fulcrologic.fulcro.algorithms.tx-processing :as ftx]
             [com.wsscode.pathom.connect :as pc]
             [com.wsscode.pathom.diplomat.http :as pd.http]
             [com.wsscode.pathom.diplomat.http.fetch :as pd.fetch]
             [com.wsscode.pathom.core :as p]
-            [conduit.connect.realworld :as connect]
+            [conduit.connect.proxy :as connect]
             [clojure.core.async :as async]
+            [goog.dom :as gdom]
+            [goog.dom.dataset :as gset]
             [com.fulcrologic.fulcro.application :as app]
             [edn-query-language.core :as eql])
   (:import (goog.history Html5History Event)))
@@ -38,7 +40,6 @@
                               IDeref (-deref [this] (.getItem js/localStorage "jwt"))
                               IReset (-reset! [this value] (.setItem js/localStorage "jwt" value)
                                        value))
-   ::cr/api-url             "https://conduit.productionready.io/api"
    ::pd.http/driver         pd.fetch/request-async
    ::p/reader               [p/map-reader
                              pc/parallel-reader
@@ -46,11 +47,14 @@
                              p/env-placeholder-reader]
    ::p/placeholder-prefixes #{">"}})
 
-(defonce app
-         (delay (app/fulcro-app {:client-did-mount cr/client-did-mount
-                                 :shared           {::cr/history (Html5History.)}
-                                 :remotes          {:remote remote}})))
+(defonce app (atom nil))
 
 (defn ^:export main
   [node]
-  (app/mount! @app cr/Root node))
+  (let [target (gdom/getElement node)
+        api-url (gset/get target "apiUrl")]
+    (-> (reset! app (app/fulcro-app {:client-did-mount cr/client-did-mount
+                                     :shared           {::cr/history (Html5History.)}
+                                     :remotes          {:remote (assoc remote
+                                                                  ::cr/api-url api-url)}}))
+        (app/mount! cr/Root node))))
