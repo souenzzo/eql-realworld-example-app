@@ -1,24 +1,28 @@
 (ns conduit.ui
-  (:require [com.fulcrologic.fulcro.dom :as dom]
-            [goog.object :as gobj]
-            [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
-            ["marksy" :as md]
-            ["react" :as r]))
+  (:require [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+            #?@(:cljs    [[com.fulcrologic.fulcro.dom :as dom]
+                          [goog.object :as gobj]
+                          ["marksy" :as md]
+                          ["react" :as r]]
+                :default [[com.fulcrologic.fulcro.dom-server :as dom]])))
 
 (def markdown-impl
-  (md/marksy #js {:createElement r/createElement}))
+  #?(:cljs    (md/marksy #js {:createElement r/createElement})
+     :default (constantly nil)))
 
 (defn markdown
   [s]
-  (.-tree (markdown-impl (str s))))
+  #?(:cljs    (.-tree (markdown-impl (str s)))
+     :default nil))
 
 (defn show-date
   [x]
-  (when (inst? x)
-    (.toLocaleDateString x js/undefined #js {:weekday "short"
-                                             :month   "short"
-                                             :day     "numeric"
-                                             :year    "numeric"})))
+  #?(:cljs    (when (inst? x)
+                (.toLocaleDateString x js/undefined #js {:weekday "short"
+                                                         :month   "short"
+                                                         :day     "numeric"
+                                                         :year    "numeric"}))
+     :default (str x)))
 
 (defsc TagPillOutline [this {:conduit.tag/keys [tag href]}]
   {:query [:conduit.tag/tag
@@ -65,13 +69,14 @@
     (dom/form
       {:onSubmit (fn [e]
                    (.preventDefault e)
-                   (when-not disabled?
-                     (let [form (-> e .-target)
-                           params (into {}
-                                        (map (fn [attribute]
-                                               [attribute (.-value (gobj/get form (str attribute)))]))
-                                        attributes)]
-                       (on-submit params))))}
+                   #?(:cljs    (when-not disabled?
+                                 (let [form (-> e .-target)
+                                       params (into {}
+                                                    (map (fn [attribute]
+                                                           [attribute (.-value (gobj/get form (str attribute)))]))
+                                                    attributes)]
+                                   (on-submit params)))
+                      :default nil))}
       (for [attribute attributes
             :let [attrs {:className    (if (contains? large attribute)
                                          "form-control form-control-lg"

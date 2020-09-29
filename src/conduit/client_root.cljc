@@ -1,19 +1,21 @@
 (ns conduit.client-root
   (:require [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
             [com.fulcrologic.fulcro.data-fetch :as df]
-            [goog.events :as events]
-            [goog.history.EventType :as et]
-            [com.fulcrologic.fulcro.dom :as dom]
+            #?@(:cljs    [[goog.history.EventType :as et]
+                          [goog.events :as events]
+                          [com.fulcrologic.fulcro.dom :as dom]]
+                :default [[com.fulcrologic.fulcro.dom-server :as dom]])
             [com.fulcrologic.fulcro.mutations :as m]
             [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
             [conduit.ui :as ui]
             [clojure.string :as string])
-  (:import (goog.history Html5History Event)))
+  #?@(:cljs    [(:import (goog.history Html5History Event))]
+      :default []))
 
 (defn push!
   [app path]
-  (let [{::keys [^Html5History history]} (comp/shared app)]
-    (.setToken history (subs path 1))))
+  #?(:cljs (let [{::keys [^Html5History history]} (comp/shared app)]
+             (.setToken history (subs path 1)))))
 
 (defsc Home [this {::keys [articles
                            feed-toggle
@@ -55,6 +57,8 @@
             (dom/div
               {:className "tag-list"}
               (map ui/ui-tag-pill popular-tags))))))))
+
+(def ui-home (comp/factory Home))
 
 (defsc Article [this {:>/keys               [article-meta]
                       :conduit.article/keys [comments body title]}]
@@ -408,7 +412,8 @@
 (def ui-header (comp/factory Header))
 
 
-(goog-define VERSION "develop")
+#?(:cljs    (goog-define VERSION "develop")
+   :default (def VERSION "develop"))
 
 (defsc Footer [this {::keys []}]
   {:query []}
@@ -442,6 +447,8 @@
     (ui-header header)
     (ui-top-router router)
     (ui-footer footer)))
+
+(def ui-root (comp/factory Root))
 
 (defsc AuthReturn [_ _]
   {:query [{:>/header (comp/get-query Header)}
@@ -478,10 +485,10 @@
   [app]
   (let [{::keys [history]} (comp/shared app)]
     (doto history
-      (events/listen et/NAVIGATE (fn [^Event e]
-                                   (let [token (.-token e)
-                                         path (vec (rest (string/split (first (string/split token #"\?"))
-                                                                       #"/")))]
-                                     (dr/change-route! app path)
-                                     (df/load! app :>/header Header))))
+      #?(:cljs (events/listen et/NAVIGATE (fn [^Event e]
+                                            (let [token (.-token e)
+                                                  path (vec (rest (string/split (first (string/split token #"\?"))
+                                                                                #"/")))]
+                                              (dr/change-route! app path)
+                                              (df/load! app :>/header Header)))))
       (.setEnabled true))))

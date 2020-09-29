@@ -4,6 +4,8 @@
             [cognitect.transit :as t]
             [com.wsscode.pathom.core :as p]
             [conduit.connect.proxy :as connect.proxy]
+            [conduit.client-root :as client-root]
+            [com.fulcrologic.fulcro.dom-server :as dom]
             [com.wsscode.pathom.diplomat.http :as pd.http]
             [com.wsscode.pathom.diplomat.http.clj-http :as pd.clj-http]
             [com.wsscode.pathom.connect :as pc]
@@ -115,6 +117,22 @@
               :version          "1"})
    :status 200})
 
+(defn ssr-experimental
+  [req]
+  (let [home (async/<!! (proxy-parser {} (comp/get-query client-root/Home)))]
+    {:body    (->> [:html {:lang "en-US"}
+                    (ui-head req)
+                    [:body
+                     (h/raw (string/join "\n"
+                                         (map dom/render-to-str [(client-root/ui-header {})
+                                                                 (client-root/ui-home home)
+                                                                 (client-root/ui-footer {})])))]]
+                   (h/html {:mode :html}
+                           (h/raw "<!DOCTYPE html>\n"))
+                   str)
+     :headers {"Content-Type" (mime/default-mime-types "html")}
+     :status  200}))
+
 (def routes
   `#{;; clients
      ["/client/eql" :get client-eql]
@@ -127,6 +145,7 @@
      #_["/datascript/rest" :post datascript-rest]
      ;; others
      ["/manifest.webmanifest" :get manifest]
+     ["/ssr-experimental" :get ssr-experimental]
      ["/workspace" :get workspace]})
 
 (defn not-found-interceptor-leave
