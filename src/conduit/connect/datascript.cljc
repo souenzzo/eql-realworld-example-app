@@ -1,6 +1,13 @@
 (ns conduit.connect.datascript
   (:require [datascript.core :as ds]
-            [com.wsscode.pathom.connect :as pc]))
+            [com.wsscode.pathom.connect :as pc]
+            [clojure.core.async :as async]))
+
+(def schema {:conduit.article/slug     {:db/unique :db.unique/identity}
+             :conduit.article/tag-list {:db/valueType   :db.type/ref
+                                        :db/cardinality :db.cardinality/many}
+             :conduit.tag/tag          {:db/unique :db.unique/identity}
+             :conduit.article/author   {:db/valueType :db.type/ref}})
 
 (def register
   [(pc/constantly-resolver
@@ -51,26 +58,6 @@
                 (fn [{:conduit.client-root/keys [jwt]
                       :as                       env} {:conduit.profile/keys [email password username]}]))
    (pc/constantly-resolver :conduit.client-root/waiting? false)
-   (pc/resolver `article
-                {::pc/input  #{:conduit.article/slug}
-                 ::pc/output [:conduit.article/body
-                              :conduit.profile/image
-                              :conduit.article/created-at
-                              :conduit.profile/username
-                              :conduit.article/title]}
-                (fn [ctx {:conduit.article/keys [slug]}]))
-   (pc/resolver `slug->href
-                {::pc/input  #{:conduit.article/slug}
-                 ::pc/output [:conduit.article/href]}
-                (fn [_ {:conduit.article/keys [slug]}]))
-   (pc/resolver `username->href
-                {::pc/input  #{:conduit.profile/username}
-                 ::pc/output [:conduit.profile/href]}
-                (fn [_ {:conduit.profile/keys [username]}]))
-   (pc/resolver `comments
-                {::pc/input  #{:conduit.article/slug}
-                 ::pc/output [:conduit.article/comments]}
-                (fn [ctx {:conduit.article/keys [slug]}]))
    (pc/resolver `current-user
                 {::pc/output [:conduit.client-root/my-profile]}
                 (fn [{:conduit.client-root/keys [jwt]
@@ -93,6 +80,33 @@
    (pc/resolver `popular-tags
                 {::pc/output [:conduit.client-root/popular-tags]}
                 (fn [ctx _]))
+
+   (pc/resolver `article-pull
+                {::pc/input  #{:conduit.article/slug}
+                 ::pc/output [:conduit.article/title
+                              :conduit.article/created-at
+                              :conduit.article/description
+                              :conduit.article/tag-list
+                              :conduit.article/href]}
+                (fn [{::keys [db]} {:conduit.article/keys [slug]}]
+                  (ds/pull db '[{:conduit.article/tag-list [*]}
+                                *]
+                           [:conduit.article/slug slug])))
+   (pc/resolver `article-author
+                {::pc/input  #{:conduit.article/slug}
+                 ::pc/output [:conduit.profile/username
+                              :conduit.profile/image
+                              :conduit.profile/href]}
+                (fn [{::keys [db]} {:conduit.article/keys [slug]}]
+                  (-> (ds/pull db '[{:conduit.article/author [*]}]
+                               [:conduit.article/slug slug])
+                      :conduit.article/author)))
    (pc/resolver `articles
                 {::pc/output [:conduit.client-root/articles]}
-                (fn [ctx _]))])
+                (fn [{::keys [db]} _]
+                  {:conduit.client-root/articles (map (partial zipmap [:conduit.article/slug])
+                                                      (ds/q '[:find ?slug
+                                                              ;; :keys :conduit.article/slug
+                                                              :where
+                                                              [_ :conduit.article/slug ?slug]]
+                                                            db))}))])
