@@ -3,11 +3,15 @@
             [com.wsscode.pathom.connect :as pc]
             [clojure.core.async :as async]))
 
-(def schema {:conduit.article/slug     {:db/unique :db.unique/identity}
-             :conduit.article/tag-list {:db/valueType   :db.type/ref
-                                        :db/cardinality :db.cardinality/many}
-             :conduit.tag/tag          {:db/unique :db.unique/identity}
-             :conduit.article/author   {:db/valueType :db.type/ref}})
+(def schema {:conduit.article/slug               {:db/unique :db.unique/identity}
+             :conduit.profile/email              {:db/unique :db.unique/identity}
+             :conduit.profile/username           {:db/unique :db.unique/identity}
+             :conduit.article/tag-list           {:db/valueType   :db.type/ref
+                                                  :db/cardinality :db.cardinality/many}
+             :conduit.tag/tag                    {:db/unique :db.unique/identity}
+             :conduit.profile/favorites-articles {:db/valueType   :db.type/ref
+                                                  :db/cardinality :db.cardinality/many}
+             :conduit.article/author             {:db/valueType :db.type/ref}})
 
 (def register
   [(pc/constantly-resolver
@@ -47,9 +51,29 @@
                 {::pc/params [:conduit.profile/password
                               :conduit.profile/email]
                  ::pc/output []}
-                (fn [{:conduit.client-root/keys [jwt]
-                      :as                       env} {:conduit.profile/keys [email password]}]))
-   #_(pc/constantly-resolver :conduit.redirect/path nil)
+                (fn [{::keys [db]} {:conduit.profile/keys [email password]}]
+                  (if-let [{:conduit.profile/keys [href username]} (ffirst (ds/q '[:find (pull ?e [*])
+                                                                                   :in $ ?email ?password
+                                                                                   :where
+                                                                                   [?e :conduit.profile/email ?email]
+                                                                                   [?e :conduit.profile/password ?password]]
+                                                                                 db email password))]
+                    {:conduit.client-root/top-routes [{:conduit.client-root/label "Home"
+                                                       :conduit.client-root/path  "/home"}
+                                                      {:conduit.client-root/label "New Article"
+                                                       :conduit.client-root/path  "/editor"}
+                                                      {:conduit.client-root/label "Settings"
+                                                       :conduit.client-root/path  "/settings"}
+                                                      {:conduit.client-root/label username
+                                                       :conduit.client-root/path  href}]
+                     :conduit.redirect/path          "/home"}
+                    {:conduit.client-root/top-routes [{:conduit.client-root/label "Home"
+                                                       :conduit.client-root/path  "/home"}
+                                                      {:conduit.client-root/label "Sign up"
+                                                       :conduit.client-root/path  "/register"}
+                                                      {:conduit.client-root/label "Sign in"
+                                                       :conduit.client-root/path  "/login"}]
+                     :conduit.client-root/errors     [{:conduit.error/message "wrong password"}]})))
    (pc/mutation `conduit.profile/register
                 {::pc/params [:conduit.profile/password
                               :conduit.profile/email
@@ -101,6 +125,16 @@
                   (-> (ds/pull db '[{:conduit.article/author [*]}]
                                [:conduit.article/slug slug])
                       :conduit.article/author)))
+   (pc/resolver `article-favorites-count
+                {::pc/input  #{:conduit.article/slug}
+                 ::pc/output [:conduit.article/favorites-count]}
+                (fn [{::keys [db]} {:conduit.article/keys [slug]}]
+                  {:conduit.article/favorites-count (ds/q '[:find (count ?profile) .
+                                                            :in $ ?slug
+                                                            :where
+                                                            [?article :conduit.article/slug ?slug]
+                                                            [?profile :conduit.profile/favorites-articles ?article]]
+                                                          db slug)}))
    (pc/resolver `articles
                 {::pc/output [:conduit.client-root/articles]}
                 (fn [{::keys [db]} _]
