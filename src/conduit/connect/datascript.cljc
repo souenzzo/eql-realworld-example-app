@@ -13,6 +13,8 @@
                                                   :db/cardinality :db.cardinality/many}
              :conduit.article/author             {:db/valueType :db.type/ref}})
 
+#?(:cljs (def Throwable :default))
+
 (def register
   [(pc/constantly-resolver
      :conduit.client-root/feed-toggle [{:conduit.feed-button/label "Your Feed"
@@ -47,6 +49,7 @@
                                                            :conduit.client-root/path  "#/register"}
                                                           {:conduit.client-root/label "Sign in"
                                                            :conduit.client-root/path  "#/login"}]))})))
+   (pc/single-attr-resolver :conduit.profile/username :conduit.profile/href #(str "/profile/" %))
    (pc/mutation `conduit.profile/login
                 {::pc/params [:conduit.profile/password
                               :conduit.profile/email]
@@ -79,8 +82,30 @@
                               :conduit.profile/email
                               :conduit.profile/username]
                  ::pc/output []}
-                (fn [{:conduit.client-root/keys [jwt]
-                      :as                       env} {:conduit.profile/keys [email password username]}]))
+                (fn [{::keys [conn]} {:conduit.profile/keys [email password username]}]
+                  (let [href (str "/profile/" username)]
+                    (try
+                      (ds/transact! conn [{:conduit.profile/password password
+                                           :conduit.profile/email    email
+                                           :conduit.profile/href     href
+                                           :conduit.profile/username username}])
+                      {:conduit.client-root/top-routes [{:conduit.client-root/label "Home"
+                                                         :conduit.client-root/path  "/home"}
+                                                        {:conduit.client-root/label "New Article"
+                                                         :conduit.client-root/path  "/editor"}
+                                                        {:conduit.client-root/label "Settings"
+                                                         :conduit.client-root/path  "/settings"}
+                                                        {:conduit.client-root/label username
+                                                         :conduit.client-root/path  href}]
+                       :conduit.redirect/path          "/home"}
+                      (catch Throwable ex
+                        {:conduit.client-root/top-routes [{:conduit.client-root/label "Home"
+                                                           :conduit.client-root/path  "/home"}
+                                                          {:conduit.client-root/label "Sign up"
+                                                           :conduit.client-root/path  "/register"}
+                                                          {:conduit.client-root/label "Sign in"
+                                                           :conduit.client-root/path  "/login"}]
+                         :conduit.client-root/errors     [{:conduit.error/message "wrong password"}]})))))
    (pc/constantly-resolver :conduit.client-root/waiting? false)
    (pc/resolver `current-user
                 {::pc/output [:conduit.client-root/my-profile]}
@@ -91,7 +116,9 @@
                  ::pc/output [:conduit.profile/bio
                               :conduit.profile/image
                               :conduit.profile/following]}
-                (fn [ctx {:conduit.profile/keys [username]}]))
+                (fn [{::keys [db]} {:conduit.profile/keys [username]}]
+                  (ds/pull db '[*]
+                           [:conduit.profile/username username])))
    (pc/resolver `profile/articles
                 {::pc/input  #{:conduit.profile/username}
                  ::pc/output [:conduit.profile/article-count
@@ -118,9 +145,7 @@
                            [:conduit.article/slug slug])))
    (pc/resolver `article-author
                 {::pc/input  #{:conduit.article/slug}
-                 ::pc/output [:conduit.profile/username
-                              :conduit.profile/image
-                              :conduit.profile/href]}
+                 ::pc/output [:conduit.profile/username]}
                 (fn [{::keys [db]} {:conduit.article/keys [slug]}]
                   (-> (ds/pull db '[{:conduit.article/author [*]}]
                                [:conduit.article/slug slug])
@@ -136,11 +161,14 @@
                                                             [?profile :conduit.profile/favorites-articles ?article]]
                                                           db slug)}))
    (pc/resolver `articles
-                {::pc/output [:conduit.client-root/articles]}
+                {::pc/output [:conduit.client-root/articles
+                              :conduit.client-root/articles-count]}
                 (fn [{::keys [db]} _]
-                  {:conduit.client-root/articles (map (partial zipmap [:conduit.article/slug])
-                                                      (ds/q '[:find ?slug
-                                                              ;; :keys :conduit.article/slug
-                                                              :where
-                                                              [_ :conduit.article/slug ?slug]]
-                                                            db))}))])
+                  (let [articles (map (partial zipmap [:conduit.article/slug])
+                                      (ds/q '[:find ?slug
+                                              ;; :keys :conduit.article/slug
+                                              :where
+                                              [_ :conduit.article/slug ?slug]]
+                                            db))]
+                    {:conduit.client-root/articles       articles
+                     :conduit.client-root/articles-count (count articles)})))])

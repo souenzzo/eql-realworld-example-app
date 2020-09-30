@@ -15,7 +15,7 @@
 (defn push!
   [app path]
   #?(:cljs (let [{::keys [^Html5History history]} (comp/shared app)]
-             (.setToken history (subs path 1)))))
+             (.setToken history path))))
 
 (defsc Home [this {::keys [articles
                            feed-toggle
@@ -48,7 +48,7 @@
           (for [article articles]
             (ui/ui-article-preview (comp/computed article
                                                   {::ui/on-fav (fn []
-                                                                 (push! this "#/login"))}))))
+                                                                 (push! this "/login"))}))))
         (dom/div
           {:className "col-md-3"}
           (dom/div
@@ -299,9 +299,9 @@
     (ui/ui-user-info (comp/computed user-info
                                     (if me?
                                       {::ui/on-edit (fn []
-                                                      (push! this "#/settings"))}
+                                                      (push! this "/settings"))}
                                       {::ui/on-follow (fn []
-                                                        (push! this "#/login"))})))
+                                                        (push! this "/login"))})))
     (dom/div
       :.container
       (dom/div
@@ -341,9 +341,9 @@
     (ui/ui-user-info (comp/computed user-info
                                     (if me?
                                       {::ui/on-edit (fn []
-                                                      (push! this "#/settings"))}
+                                                      (push! this "/settings"))}
                                       {::ui/on-follow (fn []
-                                                        (push! this "#/login"))})))
+                                                        (push! this "/login"))})))
     (dom/div
       :.container
       (dom/div

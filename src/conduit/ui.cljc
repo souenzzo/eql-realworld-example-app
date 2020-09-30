@@ -30,7 +30,7 @@
    :ident :conduit.tag/tag}
   (dom/li
     {:className "tag-default tag-pill tag-outline"
-     :href      href}
+     :href      (str "#" href)}
     tag))
 
 (def ui-tag-pill-outline (comp/factory TagPillOutline {:keyfn :conduit.tag/tag}))
@@ -41,7 +41,7 @@
    :ident :conduit.tag/tag}
   (dom/a
     {:className "tag-default tag-pill"
-     :href      href}
+     :href      (str "#" href)}
     tag))
 
 (def ui-tag-pill (comp/factory TagPill {:keyfn :conduit.tag/tag}))
@@ -115,11 +115,11 @@
         (markdown body)))
     (dom/div
       :.card-footer
-      (dom/a :.comment-author {:href ""}
+      (dom/a :.comment-author {:href "#"}
              (dom/img :.comment-author-img
                       {:alt (str "profile of " username)
                        :src image}))
-      (dom/a :.comment-author {:href ""} username)
+      (dom/a :.comment-author {:href "#"} username)
       (dom/span :.date-posted (show-date created-at)))))
 
 (def ui-comment (comp/factory Comment {:keyfn :conduit.comment/id}))
@@ -133,7 +133,7 @@
     {:className "nav-item"
      :key       label}
     (dom/a {:className "nav-link disabled"
-            :href      href}
+            :href      (str "#" href)}
            label)))
 
 
@@ -158,7 +158,7 @@
   (dom/div
     {:className "article-meta"}
     (dom/a
-      {:href href}
+      {:href   (str "#" href)}
       (dom/img
         {:alt (str "profile of " username)
          :src image}))
@@ -166,7 +166,7 @@
       {:className "info"}
       (dom/a
         {:className "author"
-         :href      href}
+         :href      (str "#" href)}
         username)
       (dom/span
         {:className "date"}
@@ -215,7 +215,7 @@
     (ui-article-meta (comp/computed article-meta computed))
     (dom/a
       {:className "preview-link"
-       :href      href}
+       :href      (str "#" href)}
       (dom/h1 title)
       (dom/p description)
       (dom/span "Read more...")

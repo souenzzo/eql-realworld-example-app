@@ -4,6 +4,7 @@
             [cognitect.transit :as t]
             [com.wsscode.pathom.core :as p]
             [conduit.connect.proxy :as connect.proxy]
+            [conduit.connect.datascript :as connect.datascript]
             [conduit.client-root :as client-root]
             [com.fulcrologic.fulcro.dom-server :as dom]
             [com.wsscode.pathom.diplomat.http :as pd.http]
@@ -15,7 +16,8 @@
             [clojure.edn :as edn]
             [cheshire.core :as json]
             [com.fulcrologic.fulcro.components :as comp]
-            [clojure.string :as string]))
+            [clojure.string :as string]
+            [datascript.core :as ds]))
 
 (defn ui-head
   [req]
@@ -106,6 +108,35 @@
                  (t/write w result)))
      :status 200}))
 
+(defonce datascript-conn
+         (ds/create-conn connect.datascript/schema))
+
+(def datascript-parser
+  (p/parallel-parser
+    {::p/plugins [(pc/connect-plugin {::pc/register connect.datascript/register})
+                  p/elide-special-outputs-plugin]
+     ::p/mutate  pc/mutate-async
+     ::p/env     {::p/reader                [p/map-reader
+                                             pc/parallel-reader
+                                             pc/open-ident-reader
+                                             p/env-placeholder-reader]
+                  ::connect.datascript/conn datascript-conn
+                  ::p/placeholder-prefixes  #{">"}}}))
+
+
+
+(defn datascript-eql
+  [req]
+  (let [tx (-> req :body io/input-stream (t/reader :json) t/read)
+        result (async/<!! (datascript-parser (assoc req
+                                               ::connect.datascript/db (ds/db datascript-conn))
+                                             tx))]
+    {:body   (fn [out]
+               (let [w (t/writer out :json)]
+                 (t/write w result)))
+     :status 200}))
+
+
 (defn manifest
   [_]
   {:body   (json/generate-string
@@ -143,7 +174,7 @@
      ;; servers
      ["/proxy/eql" :post proxy-eql]
      #_["/proxy/rest" :post proxy-rest]
-     #_["/datascript/eql" :post datascript-eql]
+     ["/datascript/eql" :post datascript-eql]
      #_["/datascript/rest" :post datascript-rest]
      ;; others
      ["/manifest.webmanifest" :get manifest]
@@ -168,7 +199,10 @@
                                     "REST Client with conduit REST API"]]
                                   [:li
                                    [:a {:href "/client/eql?api-url=/proxy/eql#/home"}
-                                    "EQL Client with proxy server to conduit REST API"]]]
+                                    "EQL Client with proxy server to conduit REST API"]]
+                                  [:li
+                                   [:a {:href "/client/eql?api-url=/datascript/eql#/home"}
+                                    "EQL Client with datascript server"]]]
                                  [:p "localStorage"]
                                  [:pre
                                   {:id "localStorage"}]
