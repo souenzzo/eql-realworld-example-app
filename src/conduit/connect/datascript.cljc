@@ -52,8 +52,7 @@
    (pc/single-attr-resolver :conduit.profile/username :conduit.profile/href #(str "/profile/" %))
    (pc/mutation `conduit.profile/login
                 {::pc/params [:conduit.profile/password
-                              :conduit.profile/email]
-                 ::pc/output []}
+                              :conduit.profile/email]}
                 (fn [{::keys [db]} {:conduit.profile/keys [email password]}]
                   (if-let [{:conduit.profile/keys [href username]} (ffirst (ds/q '[:find (pull ?e [*])
                                                                                    :in $ ?email ?password
@@ -77,11 +76,15 @@
                                                       {:conduit.client-root/label "Sign in"
                                                        :conduit.client-root/path  "/login"}]
                      :conduit.client-root/errors     [{:conduit.error/message "wrong password"}]})))
+   (pc/resolver `jwt-username
+                {::pc/output [:conduit.jwt/username]}
+                (fn [{::keys [jwt-username]} _]
+                  (when jwt-username
+                    {:conduit.jwt/username jwt-username})))
    (pc/mutation `conduit.profile/register
                 {::pc/params [:conduit.profile/password
                               :conduit.profile/email
-                              :conduit.profile/username]
-                 ::pc/output []}
+                              :conduit.profile/username]}
                 (fn [{::keys [conn]} {:conduit.profile/keys [email password username]}]
                   (let [href (str "/profile/" username)]
                     (try
