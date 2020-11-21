@@ -103,8 +103,10 @@
                  ::pc/output []}
                 (fn [{:conduit.client-root/keys [jwt]
                       :as                       env} {:conduit.profile/keys [email password]}]
-                  (let [body #js {:user #js{:email    email
-                                            :password password}}]
+                  (let [body #?(:cljs #js {:user #js{:email    email
+                                                     :password password}}
+                                :default {:user {:email    email
+                                                 :password password}})]
                     (async/go
                       (let [{::http/keys [body]} (async/<! (fetch env {::path   "/users/login"
                                                                        ::method "POST"
@@ -129,9 +131,12 @@
                  ::pc/output []}
                 (fn [{:conduit.client-root/keys [jwt]
                       :as                       env} {:conduit.profile/keys [email password username]}]
-                  (let [body #js {:user #js{:email    email
-                                            :username username
-                                            :password password}}]
+                  (let [body #?(:cljs #js {:user #js{:email    email
+                                                     :username username
+                                                     :password password}}
+                                :default {:user {:email    email
+                                                 :username username
+                                                 :password password}})]
                     (async/go
                       (let [{::http/keys [body]} (async/<! (fetch env {::path   "/users"
                                                                        ::method "POST"

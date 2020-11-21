@@ -1,20 +1,20 @@
 {:paths   ["src" "resources"]
- :deps    {com.fulcrologic/fulcro       {:mvn/version "3.3.3"}
-           com.wsscode/pathom           {:mvn/version "2.3.0-alpha10"}
-           edn-query-language/eql       {:mvn/version "1.0.0"}
-           io.pedestal/pedestal.service {:mvn/version "0.5.8"}
-           cheshire/cheshire            {:mvn/version "5.10.0"}
-           io.pedestal/pedestal.jetty   {:mvn/version "0.5.8"}
-           datascript/datascript        {:mvn/version "1.0.1"}
-           com.cognitect/transit-clj    {:mvn/version "1.0.324"}
-           hiccup/hiccup                {:mvn/version "2.0.0-alpha2"}
-           org.clojure/clojure          {:mvn/version "1.10.2-alpha2"}
-           org.clojure/core.async       {:mvn/version "1.3.610"}
-           clj-http/clj-http            {:mvn/version "3.10.3"}}
- :aliases {:shadow-cljs {:extra-deps {thheller/shadow-cljs {:mvn/version "2.11.4"}}
+ :deps    {cheshire/cheshire            {:mvn/version "5.10.0"},
+           clj-http/clj-http            {:mvn/version "3.11.0"},
+           com.cognitect/transit-clj    {:mvn/version "1.0.324"},
+           com.wsscode/pathom           {:mvn/version "2.3.0-alpha17"},
+           datascript/datascript        {:mvn/version "1.0.1"},
+           edn-query-language/eql       {:mvn/version "1.0.0"},
+           hiccup/hiccup                {:mvn/version "2.0.0-alpha2"},
+           io.pedestal/pedestal.jetty   {:mvn/version "0.5.8"},
+           io.pedestal/pedestal.service {:mvn/version "0.5.8"},
+           org.clojure/clojure          {:mvn/version "1.10.2-alpha4"},
+           org.clojure/core.async       {:mvn/version "1.3.610"}}
+ :aliases {:shadow-cljs {:extra-deps {com.fulcrologic/fulcro {:mvn/version "3.4.3"}
+                                      thheller/shadow-cljs   {:mvn/version "2.11.7"}}
                          :jvm-opts   ["-Dclojure.main.report=stderr"]
                          :main-opts  ["-m" "shadow.cljs.devtools.cli"]}
-           :test        {:extra-deps  {org.clojure/test.check {:mvn/version "1.0.0"}}
+           :test        {:extra-deps  {org.clojure/test.check {:mvn/version "1.1.0"}}
                          :extra-paths ["test"]}
            :aot         {:jvm-opts  ["-Dclojure.main.report=stderr"]
                          :main-opts ["-e" "(compile,(symbol,:conduit.server))"]}
@@ -22,6 +22,6 @@
                          :jvm-opts    ["-Dclojure.main.report=stderr" "-Xmx450m"]
                          :main-opts   ["-m" "conduit.server"]}
            :dev         {:extra-deps  {binaryage/devtools  {:mvn/version "1.0.2"}
-                                       clj-kondo/clj-kondo {:mvn/version "2020.09.09"}
+                                       clj-kondo/clj-kondo {:mvn/version "2020.11.07"}
                                        nubank/workspaces   {:mvn/version "1.0.15"}}
                          :extra-paths ["dev"]}}}
