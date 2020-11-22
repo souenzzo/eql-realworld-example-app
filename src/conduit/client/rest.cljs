@@ -28,7 +28,7 @@
 
 (def parser
   (p/parallel-parser
-    {::p/plugins [(pc/connect-plugin {::pc/register (concat connect/register
+    {::p/plugins [(pc/connect-plugin {::pc/register (concat connect/-register
                                                             [pc/index-explorer-resolver])})
                   p/elide-special-outputs-plugin]
      ::p/mutate  pc/mutate-async}))

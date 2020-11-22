@@ -63,8 +63,96 @@
                                v])))))))
 
 
-(def register
-  [(pc/constantly-resolver
+(pc/defmutation login [{:conduit.client-root/keys [jwt]
+                        :as                       env}
+                       {:conduit.profile/keys [email password]}]
+  {::pc/params [:conduit.profile/password
+                :conduit.profile/email]
+   ::pc/sym    'conduit.profile/login}
+  (let [body #?(:cljs #js {:user #js{:email    email
+                                     :password password}}
+                :default {:user {:email    email
+                                 :password password}})]
+    (async/go
+      (let [{::http/keys [body]} (async/<! (fetch env {::path   "/users/login"
+                                                       ::method "POST"
+                                                       ::body   (json-stringify body)}))
+            {:keys [errors user]} body
+            {:conduit.profile/keys [token]
+             :as                   my-profile} (assoc (qualify-profile user)
+                                                 :conduit.profile/email email)]
+        (when token
+          (reset! jwt token))
+        (cond-> my-profile
+                errors (assoc :conduit.client-root/errors (for [[k vs] errors
+                                                                v vs]
+                                                            {:conduit.error/id      (str (gensym "conduit.error"))
+                                                             :conduit.error/message (str k ": " v)}))
+                (empty? errors) (assoc :conduit.redirect/path "#/home"))))))
+
+(pc/defmutation create-user [{:conduit.client-root/keys [jwt]
+                              :as                       env}
+                             {:conduit.profile/keys [email password username]}]
+  {::pc/params [:conduit.profile/password
+                :conduit.profile/email
+                :conduit.profile/username]
+   ::pc/sym    'conduit.profile/register}
+  (let [body #?(:cljs #js {:user #js{:email    email
+                                     :username username
+                                     :password password}}
+                :default {:user {:email    email
+                                 :username username
+                                 :password password}})]
+    (async/go
+      (let [{::http/keys [body]} (async/<! (fetch env {::path   "/users"
+                                                       ::method "POST"
+                                                       ::body   (json-stringify body)}))
+            {:keys [errors user]} body
+            {:conduit.profile/keys [token]
+             :as                   my-profile} (assoc (qualify-profile user)
+                                                 :conduit.profile/email email)]
+        (when token
+          (reset! jwt token))
+        (cond-> my-profile
+                errors (assoc :conduit.client-root/errors (for [[k vs] errors
+                                                                v vs]
+                                                            {:conduit.error/id      (str (gensym "conduit.error"))
+                                                             :conduit.error/message (str k ": " v)}))
+                (empty? errors) (assoc :conduit.redirect/path "#/home"))))))
+
+(pc/defresolver get-article [ctx {:conduit.article/keys [slug]}]
+  {::pc/input  #{:conduit.article/slug}
+   ::pc/output [:conduit.article/body
+                :conduit.profile/image
+                :conduit.article/created-at
+                :conduit.profile/username
+                :conduit.article/title]}
+  (async/go
+    (let [{::http/keys [body]} (async/<! (fetch ctx {::path (str "/articles/" slug)}))
+          {:keys [article]} body]
+      (qualify-article article))))
+
+(pc/defresolver get-article-comments [ctx {:conduit.article/keys [slug]}]
+  {::pc/input  #{:conduit.article/slug}
+   ::pc/output [:conduit.article/comments]}
+  (async/go
+    (let [{::http/keys [body]} (async/<! (fetch ctx {::path (str "/articles/" slug "/comments")}))
+          {:keys [comments]} body]
+      {:conduit.article/comments (for [{:keys [id body createdAt author updatedAt]} comments
+                                       :let [profile (qualify-profile author)]]
+                                   (merge
+                                     profile
+                                     {:conduit.comment/id         id
+                                      :conduit.comment/body       body
+                                      :conduit.comment/author     author
+                                      :conduit.comment/created-at (read-instant-date createdAt)
+                                      :conduit.comment/updated-at (read-instant-date updatedAt)}))})))
+
+(def -register
+  [login
+   create-user
+   get-article
+   (pc/constantly-resolver
      :conduit.client-root/feed-toggle [{:conduit.feed-button/label "Your Feed"
                                         :conduit.feed-button/href  (str "#/home")}
                                        {:conduit.feed-button/label "Global Feed"
@@ -97,75 +185,9 @@
                                                            :conduit.client-root/path  "#/register"}
                                                           {:conduit.client-root/label "Sign in"
                                                            :conduit.client-root/path  "#/login"}]))})))
-   (pc/mutation `conduit.profile/login
-                {::pc/params [:conduit.profile/password
-                              :conduit.profile/email]
-                 ::pc/output []}
-                (fn [{:conduit.client-root/keys [jwt]
-                      :as                       env} {:conduit.profile/keys [email password]}]
-                  (let [body #?(:cljs #js {:user #js{:email    email
-                                                     :password password}}
-                                :default {:user {:email    email
-                                                 :password password}})]
-                    (async/go
-                      (let [{::http/keys [body]} (async/<! (fetch env {::path   "/users/login"
-                                                                       ::method "POST"
-                                                                       ::body   (json-stringify body)}))
-                            {:keys [errors user]} body
-                            {:conduit.profile/keys [token]
-                             :as                   my-profile} (assoc (qualify-profile user)
-                                                                 :conduit.profile/email email)]
-                        (when token
-                          (reset! jwt token))
-                        (cond-> my-profile
-                                errors (assoc :conduit.client-root/errors (for [[k vs] errors
-                                                                                v vs]
-                                                                            {:conduit.error/id      (str (gensym "conduit.error"))
-                                                                             :conduit.error/message (str k ": " v)}))
-                                (empty? errors) (assoc :conduit.redirect/path "#/home")))))))
-   #_(pc/constantly-resolver :conduit.redirect/path nil)
-   (pc/mutation `conduit.profile/register
-                {::pc/params [:conduit.profile/password
-                              :conduit.profile/email
-                              :conduit.profile/username]
-                 ::pc/output []}
-                (fn [{:conduit.client-root/keys [jwt]
-                      :as                       env} {:conduit.profile/keys [email password username]}]
-                  (let [body #?(:cljs #js {:user #js{:email    email
-                                                     :username username
-                                                     :password password}}
-                                :default {:user {:email    email
-                                                 :username username
-                                                 :password password}})]
-                    (async/go
-                      (let [{::http/keys [body]} (async/<! (fetch env {::path   "/users"
-                                                                       ::method "POST"
-                                                                       ::body   (json-stringify body)}))
-                            {:keys [errors user]} body
-                            {:conduit.profile/keys [token]
-                             :as                   my-profile} (assoc (qualify-profile user)
-                                                                 :conduit.profile/email email)]
-                        (when token
-                          (reset! jwt token))
-                        (cond-> my-profile
-                                errors (assoc :conduit.client-root/errors (for [[k vs] errors
-                                                                                v vs]
-                                                                            {:conduit.error/id      (str (gensym "conduit.error"))
-                                                                             :conduit.error/message (str k ": " v)}))
-                                (empty? errors) (assoc :conduit.redirect/path "#/home")))))))
+
    (pc/constantly-resolver :conduit.client-root/waiting? false)
-   (pc/resolver `article
-                {::pc/input  #{:conduit.article/slug}
-                 ::pc/output [:conduit.article/body
-                              :conduit.profile/image
-                              :conduit.article/created-at
-                              :conduit.profile/username
-                              :conduit.article/title]}
-                (fn [ctx {:conduit.article/keys [slug]}]
-                  (async/go
-                    (let [{::http/keys [body]} (async/<! (fetch ctx {::path (str "/articles/" slug)}))
-                          {:keys [article]} body]
-                      (qualify-article article)))))
+
    (pc/resolver `slug->href
                 {::pc/input  #{:conduit.article/slug}
                  ::pc/output [:conduit.article/href]}
@@ -176,22 +198,6 @@
                  ::pc/output [:conduit.profile/href]}
                 (fn [_ {:conduit.profile/keys [username]}]
                   {:conduit.profile/href (str "#/profile/" username)}))
-   (pc/resolver `comments
-                {::pc/input  #{:conduit.article/slug}
-                 ::pc/output [:conduit.article/comments]}
-                (fn [ctx {:conduit.article/keys [slug]}]
-                  (async/go
-                    (let [{::http/keys [body]} (async/<! (fetch ctx {::path (str "/articles/" slug "/comments")}))
-                          {:keys [comments]} body]
-                      {:conduit.article/comments (for [{:keys [id body createdAt author updatedAt]} comments
-                                                       :let [profile (qualify-profile author)]]
-                                                   (merge
-                                                     profile
-                                                     {:conduit.comment/id         id
-                                                      :conduit.comment/body       body
-                                                      :conduit.comment/author     author
-                                                      :conduit.comment/created-at (read-instant-date createdAt)
-                                                      :conduit.comment/updated-at (read-instant-date updatedAt)}))}))))
    (pc/resolver `current-user
                 {::pc/output [:conduit.client-root/my-profile]}
                 (fn [{:conduit.client-root/keys [jwt]

@@ -15,7 +15,7 @@
 
 #?(:cljs (def Throwable :default))
 
-(def register
+(def -register
   [(pc/constantly-resolver
      :conduit.client-root/feed-toggle [{:conduit.feed-button/label "Your Feed"
                                         :conduit.feed-button/href  (str "#/home")}

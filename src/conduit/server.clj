@@ -80,53 +80,51 @@
   [req]
   {:status 200})
 
+(defonce datascript-conn
+         (ds/create-conn connect.datascript/schema))
 
-(def proxy-parser
+(def connect-datascript-index
+  (pc/register {} connect.datascript/-register))
+
+(def connect-proxy-index
+  (pc/register {} connect.proxy/-register))
+
+(def parser
   (p/parallel-parser
-    {::p/plugins [(pc/connect-plugin {::pc/register connect.proxy/register})
+    {::p/plugins [(pc/connect-plugin)
                   p/elide-special-outputs-plugin]
      ::p/mutate  pc/mutate-async
      ::p/env     {::p/reader                   [p/map-reader
                                                 pc/parallel-reader
                                                 pc/open-ident-reader
                                                 p/env-placeholder-reader]
+                  ::connect.datascript/conn    datascript-conn
                   :conduit.client-root/jwt     (atom nil)
                   :conduit.client-root/api-url "https://conduit.productionready.io/api"
                   ::pd.http/driver             pd.clj-http/request-async
                   ::p/placeholder-prefixes     #{">"}}}))
 
+
 (defn proxy-eql
   [req]
   (let [tx (-> req :body io/input-stream (t/reader :json) t/read)
-        result (async/<!! (proxy-parser req tx))]
+        result (async/<!! (parser
+                            (assoc req
+                              ::pc/indexes connect-proxy-index)
+                            tx))]
     {:body   (fn [out]
                (let [w (t/writer out :json)]
                  (t/write w result)))
      :status 200}))
 
-(defonce datascript-conn
-         (ds/create-conn connect.datascript/schema))
-
-(def datascript-parser
-  (p/parallel-parser
-    {::p/plugins [(pc/connect-plugin {::pc/register connect.datascript/register})
-                  p/elide-special-outputs-plugin]
-     ::p/mutate  pc/mutate-async
-     ::p/env     {::p/reader                [p/map-reader
-                                             pc/parallel-reader
-                                             pc/open-ident-reader
-                                             p/env-placeholder-reader]
-                  ::connect.datascript/conn datascript-conn
-                  ::p/placeholder-prefixes  #{">"}}}))
-
-
 
 (defn datascript-eql
   [req]
   (let [tx (-> req :body io/input-stream (t/reader :json) t/read)
-        result (async/<!! (datascript-parser (assoc req
-                                               ::connect.datascript/db (ds/db datascript-conn))
-                                             tx))]
+        result (async/<!! (parser (assoc req
+                                    ::pc/indexes connect-datascript-index
+                                    ::connect.datascript/db (ds/db datascript-conn))
+                                  tx))]
     {:body   (fn [out]
                (let [w (t/writer out :json)]
                  (t/write w result)))
@@ -188,9 +186,8 @@
                                  [:button
                                   {:onClick "Object.keys(localStorage).forEach(k => delete localStorage[k]); document.getElementById('localStorage').innerHTML = JSON.stringify(localStorage, null, 2)"}
                                   "wipe localStorage"]]]
-                               (h/html {:mode :html}
-                                       (h/raw "<!DOCTYPE html>\n"))
-                               str)
+                               (h/html {:mode :html})
+                               (str (h/raw "<!DOCTYPE html>\n")))
                  :headers {"Content-Type" (mime/default-mime-types "html")}
                  :status  404})))
 
@@ -208,19 +205,20 @@
       http/default-interceptors))
 
 (defonce http-state (atom nil))
+
 (defn -main
   [& _]
-  (let [port (or (some-> "PORT" System/getenv edn/read-string)
+  (let [port (or (some-> "PORT"
+                         System/getenv
+                         edn/read-string)
                  8000)]
-    (prn [:port port])
     (swap! http-state
            (fn [st]
              (some-> st http/stop)
              (-> service-map
                  (assoc ::http/port port)
                  http/create-server
-                 http/start)))
-    (prn [:started port])))
+                 http/start)))))
 
 (comment
   (require 'shadow.cljs.devtools.server)
