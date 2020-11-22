@@ -120,23 +120,21 @@
                                                              :conduit.error/message (str k ": " v)}))
                 (empty? errors) (assoc :conduit.redirect/path "#/home"))))))
 
-(pc/defresolver get-article [ctx {:conduit.article/keys [slug]}]
-  {::pc/input  #{:conduit.article/slug}
-   ::pc/output [:conduit.article/body
+(pc/defresolver get-article [env {:conduit.article/keys [slug]}]
+  {::pc/output [:conduit.article/body
                 :conduit.profile/image
                 :conduit.article/created-at
                 :conduit.profile/username
                 :conduit.article/title]}
   (async/go
-    (let [{::http/keys [body]} (async/<! (fetch ctx {::path (str "/articles/" slug)}))
+    (let [{::http/keys [body]} (async/<! (fetch env {::path (str "/articles/" slug)}))
           {:keys [article]} body]
       (qualify-article article))))
 
-(pc/defresolver get-article-comments [ctx {:conduit.article/keys [slug]}]
-  {::pc/input  #{:conduit.article/slug}
-   ::pc/output [:conduit.article/comments]}
+(pc/defresolver get-article-comments [env {:conduit.article/keys [slug]}]
+  {::pc/output [:conduit.article/comments]}
   (async/go
-    (let [{::http/keys [body]} (async/<! (fetch ctx {::path (str "/articles/" slug "/comments")}))
+    (let [{::http/keys [body]} (async/<! (fetch env {::path (str "/articles/" slug "/comments")}))
           {:keys [comments]} body]
       {:conduit.article/comments (for [{:keys [id body createdAt author updatedAt]} comments
                                        :let [profile (qualify-profile author)]]
@@ -148,30 +146,28 @@
                                       :conduit.comment/created-at (read-instant-date createdAt)
                                       :conduit.comment/updated-at (read-instant-date updatedAt)}))})))
 
-(pc/defresolver get-profile-by-username [ctx {:conduit.profile/keys [username]}]
-  {::pc/input  #{:conduit.profile/username}
-   ::pc/output [:conduit.profile/bio
+(pc/defresolver get-profile-by-username [env {:conduit.profile/keys [username]}]
+  {::pc/output [:conduit.profile/bio
                 :conduit.profile/image
                 :conduit.profile/following]}
   (async/go
-    (let [{::http/keys [body]} (async/<! (fetch ctx {::path (str "/profiles/" username)}))
+    (let [{::http/keys [body]} (async/<! (fetch env {::path (str "/profiles/" username)}))
           {:keys [profile]} body]
       (qualify-profile profile))))
 
-(pc/defresolver get-articles-by-username [ctx {:conduit.profile/keys [username]}]
-  {::pc/input  #{:conduit.profile/username}
-   ::pc/output [:conduit.profile/article-count
+(pc/defresolver get-articles-by-username [env {:conduit.profile/keys [username]}]
+  {::pc/output [:conduit.profile/article-count
                 :conduit.profile/articles]}
   (async/go
-    (let [{::http/keys [body]} (async/<! (fetch ctx {::path (str "/articles?author=" username "&limit=5&offset=0")}))
+    (let [{::http/keys [body]} (async/<! (fetch env {::path (str "/articles?author=" username "&limit=5&offset=0")}))
           {:keys [articles articlesCount]} body]
       {:conduit.profile/article-count articlesCount
        :conduit.profile/articles      (map qualify-article articles)})))
 
-(pc/defresolver get-articles [ctx _]
+(pc/defresolver get-articles [env _input]
   {::pc/output [:conduit.client-root/articles]}
   (async/go
-    (let [{::http/keys [body]} (async/<! (fetch ctx {::path "/articles"}))
+    (let [{::http/keys [body]} (async/<! (fetch env {::path "/articles"}))
           {:keys [articlesCount
                   articles]} body
           articles* (for [article articles]
@@ -180,7 +176,7 @@
        :conduit.client-root/articles       articles*})))
 
 (pc/defresolver current-user [{:conduit.client-root/keys [jwt]
-                               :as                       env} _]
+                               :as                       env} _input]
   {::pc/output [:conduit.client-root/my-profile]}
   (when @jwt
     (async/go
@@ -189,10 +185,10 @@
         {:conduit.client-root/my-profile (assoc (qualify-profile user)
                                            :conduit.profile/me? true)}))))
 
-(pc/defresolver popular-tags [ctx _]
+(pc/defresolver popular-tags [env _input]
   {::pc/output [:conduit.client-root/popular-tags]}
   (async/go
-    (let [{::http/keys [body]} (async/<! (fetch ctx {::path "/tags"}))
+    (let [{::http/keys [body]} (async/<! (fetch env {::path "/tags"}))
           {:keys [tags]} body]
       {:conduit.client-root/popular-tags (for [tag tags]
                                            {:conduit.tag/tag tag})})))
@@ -212,10 +208,12 @@
                                         :conduit.feed-button/href  "#/home"}
                                        {:conduit.feed-button/label "Global Feed"
                                         :conduit.feed-button/href  "#/home"}])
+   (pc/single-attr-resolver :conduit.article/slug :conduit.article/href #(str "#/article/" %))
+   (pc/single-attr-resolver :conduit.profile/username :conduit.profile/href #(str "#/profile/" %))
    (pc/resolver `top-routes
                 {::pc/output [:conduit.client-root/top-routes]}
                 (fn [{:keys [parser]
-                      :as   env} _]
+                      :as   env} _input]
                   (async/go
                     {:conduit.client-root/top-routes (let [{:conduit.profile/keys [username
                                                                                    image]} (-> (parser env [{:conduit.client-root/my-profile [:conduit.profile/username
@@ -241,16 +239,6 @@
                                                           {:conduit.client-root/label "Sign in"
                                                            :conduit.client-root/path  "#/login"}]))})))
    (pc/constantly-resolver :conduit.client-root/waiting? false)
-   (pc/resolver `slug->href
-                {::pc/input  #{:conduit.article/slug}
-                 ::pc/output [:conduit.article/href]}
-                (fn [_ {:conduit.article/keys [slug]}]
-                  {:conduit.article/href (str "#/article/" slug)}))
-   (pc/resolver `username->href
-                {::pc/input  #{:conduit.profile/username}
-                 ::pc/output [:conduit.profile/href]}
-                (fn [_ {:conduit.profile/keys [username]}]
-                  {:conduit.profile/href (str "#/profile/" username)}))
    (pc/resolver `fav-articles
                 {::pc/input  #{:conduit.profile/articles}
                  ::pc/output [:conduit.profile/favorites-articles]}
